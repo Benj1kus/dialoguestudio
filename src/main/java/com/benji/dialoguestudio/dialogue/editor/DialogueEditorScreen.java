@@ -951,7 +951,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         help(8, "IMPORTANT: project.json is NOT a datapack. It only lets Studio reopen your work.");
         help(9, "Export creates editable folders plus datapack.zip and resourcepack.zip.");
         help(10, "Export for Mods creates ready data/ + assets/ folders. Copy them into your mod's src/main/resources.");
-        help(11, "Mod export is cumulative per namespace: more Dialogue Studio projects can be exported into the same template.");
+        help(11, "Each mod export is clean and project-specific. See README.txt for sound/lang merge instructions.");
         help(13, "For testing: use Install in singleplayer, enable generated resource pack, then /reload.");
     }
 
@@ -1523,6 +1523,9 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         project.definition = fresh.definition;
         project.languages = fresh.languages;
         project.sounds = fresh.sounds;
+        project.fonts = fresh.fonts;
+        project.node_positions = fresh.node_positions;
+        project.selected_node = fresh.selected_node;
         project.selected_line = 0;
         project.selected_trigger = 0;
         project.animate_preview = true;

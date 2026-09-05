@@ -17,6 +17,8 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public final class DialogueEditorExporter {
 
@@ -55,10 +57,7 @@ public final class DialogueEditorExporter {
         Path namespaceAssets = resourcepack.resolve("assets").resolve(project.namespace);
         Files.createDirectories(namespaceAssets);
 
-        Path imported = DialogueEditorWorkspace.assetRoot(project);
-        if (Files.exists(imported)) {
-            copyTree(imported, namespaceAssets);
-        }
+        copyUsedAssets(project, namespaceAssets);
 
         writeLanguages(project, namespaceAssets);
         writeSounds(project, namespaceAssets);
@@ -67,10 +66,13 @@ public final class DialogueEditorExporter {
         zipTree(datapack, root.resolve("datapack.zip"));
         zipTree(resourcepack, root.resolve("resourcepack.zip"));
 
+        writePackReadme(root);
+
         return new ExportResult(root, datapack, resourcepack);
     }
 
     public static ModExportResult exportForMod(DialogueEditorProject project, Path destination) throws IOException {
+
         if (destination == null || !Files.isDirectory(destination)) {
             throw new IOException("Choose an existing destination folder");
         }
@@ -79,11 +81,15 @@ public final class DialogueEditorExporter {
         DialogueEditorWorkspace.save(project);
 
         String namespace = project.namespace;
-        Path root = destination.resolve("DialogueStudio_ModExport_" + sanitize(namespace));
+        String dialogueSlug = sanitize(project.dialogue_path.replace('/', '_'));
+
+        Path root = destination.resolve("DialogueStudio_ModExport_" + sanitize(namespace) + "_" + dialogueSlug);
+        deleteTree(root);
+
+        Files.createDirectories(root);
 
         Path dataRoot = root.resolve("data");
         Path assetsRoot = root.resolve("assets");
-
         Path dialogue = dataRoot.resolve(namespace).resolve("dialogues").resolve(project.dialogue_path + ".json");
 
         Files.createDirectories(dialogue.getParent());
@@ -92,16 +98,106 @@ public final class DialogueEditorExporter {
         Path namespaceAssets = assetsRoot.resolve(namespace);
         Files.createDirectories(namespaceAssets);
 
-        Path imported = DialogueEditorWorkspace.assetRoot(project);
-        if (Files.exists(imported)) {
-            copyTree(imported, namespaceAssets);
-        }
-
-        writeLanguagesMerged(project, namespaceAssets);
-        writeSoundsMerged(project, namespaceAssets);
+        copyUsedAssets(project, namespaceAssets);
+        writeLanguages(project, namespaceAssets);
         writeFonts(project, namespaceAssets);
+        writeModSoundsFragment(project, root);
+        writeModReadme(root, namespace);
 
         return new ModExportResult(root, dataRoot, assetsRoot);
+    }
+
+    private static void copyUsedAssets(DialogueEditorProject project, Path namespaceAssets) throws IOException {
+
+        Path imported = DialogueEditorWorkspace.assetRoot(project);
+        if (!Files.exists(imported)) {
+            return;
+        }
+
+        String definitionJson = DialogueRegistry.toJson(project.definition);
+        Path textures = imported.resolve("textures");
+
+        if (Files.exists(textures)) {
+
+            try (var stream = Files.walk(textures)) {
+
+                for (Path file : stream.filter(Files::isRegularFile).toList()) {
+
+                    String relative = imported.relativize(file).toString().replace('\\', '/');
+                    String resourceId = project.namespace + ":" + relative;
+
+                    if (!containsResource(definitionJson, resourceId)) {
+                        continue;
+                    }
+                    copyOne(file, namespaceAssets.resolve(relative));
+                }
+            }
+        }
+
+        for (String key : usedRegisteredKeys(project, project.sounds)) {
+            String soundPath = project.sounds.get(key);
+
+            if (soundPath == null || soundPath.isBlank()) {
+
+                continue;
+            }
+            copyOne(imported.resolve("sounds").resolve(soundPath + ".ogg"),
+                    namespaceAssets.resolve("sounds").resolve(soundPath + ".ogg"));
+        }
+
+        for (String key : usedRegisteredKeys(project, project.fonts)) {
+            DialogueEditorProject.FontAsset asset = project.fonts.get(key);
+
+            if (asset == null || asset.file == null || asset.file.isBlank()) {
+                continue;
+            }
+
+            String assetFile = asset.file.replace('\\', '/');
+            if ("bitmap_msdf".equalsIgnoreCase(asset.type)) {
+                String textureName = assetFile.startsWith("font/") ? assetFile.substring("font/".length()) : assetFile;
+                copyOne(imported.resolve("textures/font").resolve(textureName),
+                        namespaceAssets.resolve("textures/font").resolve(textureName));
+
+            } else {
+                copyOne(imported.resolve(assetFile),
+                        namespaceAssets.resolve(assetFile));
+            }
+        }
+    }
+
+    private static boolean containsResource(String json, String resourceId) {
+        return json != null && resourceId != null && json.contains("\"" + resourceId + "\"");
+    }
+
+    private static <T> Set<String> usedRegisteredKeys(DialogueEditorProject project, Map<String, T> registry) {
+        Set<String> result = new LinkedHashSet<>();
+        if (registry == null || registry.isEmpty()) {
+
+            return result;
+        }
+
+        String json = DialogueRegistry.toJson(project.definition);
+        String prefix = project.namespace + ":";
+
+        for (String key : registry.keySet()) {
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            String id = prefix + key;
+            if (containsResource(json, id)) {
+                result.add(key);
+            }
+        }
+
+        return result;
+    }
+
+    private static void copyOne(Path source, Path target) throws IOException {
+        if (!Files.isRegularFile(source)) {
+            return;
+        }
+        Files.createDirectories(target.getParent());
+        Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
     }
 
     public static ExportResult installToCurrentInstance(DialogueEditorProject project) throws IOException {
@@ -166,13 +262,13 @@ public final class DialogueEditorExporter {
     }
 
     private static void writeSounds(DialogueEditorProject project, Path namespaceAssets) throws IOException {
-        if (project.sounds == null || project.sounds.isEmpty()) {
-            return;
-        }
 
         JsonObject root = new JsonObject();
         appendProjectSounds(project, root);
 
+        if (root.size() == 0) {
+            return;
+        }
         Files.writeString(namespaceAssets.resolve("sounds.json"), GSON.toJson(root), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
     }
 
@@ -190,18 +286,24 @@ public final class DialogueEditorExporter {
     }
 
     private static void appendProjectSounds(DialogueEditorProject project, JsonObject root) {
-        for (Map.Entry<String, String> entry : project.sounds.entrySet()) {
+        for (String key : usedRegisteredKeys(project, project.sounds)) {
+
+            String soundPath = project.sounds.get(key);
+            if (soundPath == null || soundPath.isBlank()) {
+
+                continue;
+            }
+
             JsonObject sound = new JsonObject();
             JsonArray array = new JsonArray();
             JsonObject item = new JsonObject();
 
-            item.addProperty("name", project.namespace + ":" + entry.getValue());
+            item.addProperty("name", project.namespace + ":" + soundPath);
             item.addProperty("stream", false);
 
             array.add(item);
             sound.add("sounds", array);
-
-            root.add(entry.getKey(), sound);
+            root.add(key, sound);
         }
     }
 
@@ -213,9 +315,10 @@ public final class DialogueEditorExporter {
         Path fontDir = namespaceAssets.resolve("font");
         Files.createDirectories(fontDir);
 
-        for (Map.Entry<String, DialogueEditorProject.FontAsset> entry : project.fonts.entrySet()) {
-            String key = sanitize(entry.getKey());
-            DialogueEditorProject.FontAsset asset = entry.getValue();
+        for (String rawKey : usedRegisteredKeys(project, project.fonts)) {
+
+            String key = sanitize(rawKey);
+            DialogueEditorProject.FontAsset asset = project.fonts.get(rawKey);
 
             if (asset == null || asset.file == null || asset.file.isBlank()) {
                 continue;
@@ -263,6 +366,46 @@ public final class DialogueEditorExporter {
 
             Files.writeString(fontDir.resolve(key + ".json"), GSON.toJson(root), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         }
+    }
+
+    private static void writeModSoundsFragment(DialogueEditorProject project, Path root) throws IOException {
+        JsonObject sounds = new JsonObject();
+        appendProjectSounds(project, sounds);
+
+        if (sounds.size() == 0) {
+            return;
+        }
+        Files.writeString(root.resolve("SOUNDS_TO_MERGE.json"), GSON.toJson(sounds), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+    }
+
+    private static void writePackReadme(Path root) throws IOException {
+
+        String text = """
+                Dialogue Studio Export
+                
+                1. Put datapack.zip into your world's datapacks folder.
+                2. Put resourcepack.zip into .minecraft/resourcepacks and enable it.
+                3. Run /reload or re-enter the world. Use F3+T after resource changes if needed.
+                
+                Both packs are required when the dialogue uses custom textures, fonts or sounds.
+                """;
+
+        Files.writeString(root.resolve("README.txt"), text, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+    }
+
+    private static void writeModReadme(Path root, String namespace) throws IOException {
+
+        String text = """
+                Dialogue Studio - Mod Export
+                
+                1. Copy data/ and assets/ into your mod's src/main/resources/.
+                2. If SOUNDS_TO_MERGE.json exists, merge its top-level entries into assets/%s/sounds.json.
+                   If sounds.json does not exist yet, move the file there and rename it to sounds.json.
+                3. If a generated lang/<locale>.json already exists in your mod, merge its entries instead of replacing it.
+                4. Rebuild/reload your mod.
+                """.formatted(namespace);
+
+        Files.writeString(root.resolve("README.txt"), text, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
     }
 
     private static JsonObject readJsonObject(Path file) throws IOException {
