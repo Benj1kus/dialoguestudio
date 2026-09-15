@@ -19,6 +19,11 @@ public final class DialogueChoiceInputScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (DialogueClientKeyMappings.matchesSkipMouse(button)) {
+            DialogueClient.setSkipInputHeld(true);
+            return true;
+        }
+
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && DialogueClient.clickChoice(mouseX, mouseY)) {
             return true;
         }
@@ -27,7 +32,22 @@ public final class DialogueChoiceInputScreen extends Screen {
     }
 
     @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (DialogueClientKeyMappings.matchesSkipMouse(button)) {
+            DialogueClient.setSkipInputHeld(false);
+            return true;
+        }
+
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (DialogueClientKeyMappings.matchesSkip(keyCode, scanCode)) {
+            DialogueClient.setSkipInputHeld(true);
+            return true;
+        }
+
         if (keyCode >= GLFW.GLFW_KEY_1 && keyCode <= GLFW.GLFW_KEY_9) {
             DialogueClient.clearChoiceHover();
             DialogueClient.selectChoiceNumber(keyCode - GLFW.GLFW_KEY_0);
@@ -49,7 +69,7 @@ public final class DialogueChoiceInputScreen extends Screen {
             return true;
         }
 
-        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER || keyCode == GLFW.GLFW_KEY_SPACE) {
+        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
             DialogueClient.clearChoiceHover();
             DialogueClient.submitSelectedChoice();
             return true;
@@ -59,6 +79,16 @@ public final class DialogueChoiceInputScreen extends Screen {
         }
 
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        if (DialogueClientKeyMappings.matchesSkip(keyCode, scanCode)) {
+            DialogueClient.setSkipInputHeld(false);
+            return true;
+        }
+
+        return super.keyReleased(keyCode, scanCode, modifiers);
     }
 
     @Override

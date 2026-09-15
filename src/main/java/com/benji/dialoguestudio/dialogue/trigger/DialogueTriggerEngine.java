@@ -6,6 +6,7 @@ import com.benji.dialoguestudio.dialogue.DialogueSessionManager;
 import com.benji.dialoguestudio.dialogue.data.DialogueDefinition;
 import com.benji.dialoguestudio.network.dialogueengine.DialogueNetwork;
 import com.benji.dialoguestudio.network.dialogueengine.DialogueZonePreviewS2CPacket;
+import com.benji.dialoguestudio.network.dialogueengine.DialogueInteractiveMarkerS2CPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -36,6 +37,7 @@ public final class DialogueTriggerEngine {
 
     private static final int ZONE_SYNC_INTERVAL = 10;
     private static final int MAX_ZONE_PREVIEWS = 96;
+    private static final int MAX_INTERACTIVE_MARKERS = 128;
 
     private DialogueTriggerEngine() {
     }
@@ -147,6 +149,7 @@ public final class DialogueTriggerEngine {
 
         if (player.tickCount % ZONE_SYNC_INTERVAL == 0) {
             syncZonePreviews(player);
+            syncInteractiveMarkers(player);
         }
 
         if (DialogueSessionManager.isActive(player)) {
@@ -348,54 +351,7 @@ public final class DialogueTriggerEngine {
 
                     String key = entry.getKey() + "|" + triggerIndex + "|" + zone.key;
 
-                    previews.add(new DialogueZonePreviewS2CPacket.Zone(key,
-                            normalizeShape(trigger.shape),
-                            zone.center.x, zone.center.y, zone.center.z,
-                            Math.max(0.1D, trigger.radius),
-                            Math.max(0.1D, trigger.height),
-                            Math.max(0.1D, trigger.size_x),
-                            Math.max(0.1D, trigger.size_y),
-                            Math.max(0.1D, trigger.size_z),
-                            visual.style != null ? visual.style : "auto",
-                            visual.show_default_zone,
-                            visual.texture,
-                            visual.texture_mode != null ? visual.texture_mode : "plane",
-                            visual.texture_fit != null ? visual.texture_fit : "stretch",
-                            Math.max(0.01D, visual.texture_repeat_x),
-                            Math.max(0.01D, visual.texture_repeat_y),
-                            visual.texture_scroll_u,
-                            visual.texture_scroll_v,
-                            visual.texture_offset_x,
-                            visual.texture_offset_y,
-                            visual.texture_offset_z,
-                            Math.max(0.05D, visual.texture_scale_x),
-                            Math.max(0.05D, visual.texture_scale_y),
-                            visual.texture_rotation_x,
-                            visual.texture_rotation,
-                            visual.texture_rotation_z,
-                            visual.color != null ? visual.color : "cyan",
-                            Mth.clamp(visual.alpha, 0.0F, 1.0F),
-                            visual.y_offset,
-                            Math.max(0.0D, visual.size),
-                            Math.max(0.0D, visual.visual_height),
-                            visual.fill_enabled,
-                            visual.fill_mode != null ? visual.fill_mode : "gradient",
-                            visual.fill_color_bottom != null ? visual.fill_color_bottom : "cyan",
-                            visual.fill_color_top != null ? visual.fill_color_top : "cyan",
-                            Mth.clamp(visual.fill_alpha_bottom, 0.0F, 1.0F),
-                            Mth.clamp(visual.fill_alpha_top, 0.0F, 1.0F),
-                            visual.pulse,
-                            Math.max(0.0D, visual.pulse_amplitude),
-                            Math.max(0.0D, visual.pulse_speed),
-                            visual.bob,
-                            Math.max(0.0D, visual.bob_amplitude),
-                            Math.max(0.0D, visual.bob_speed),
-                            visual.rotate,
-                            visual.rotate_speed,
-                            visual.alpha_breathe,
-                            Mth.clamp(visual.alpha_breathe_amount, 0.0D, 1.0D),
-                            Math.max(0.0D, visual.alpha_breathe_speed),
-                            previewDistance));
+                    previews.add(new DialogueZonePreviewS2CPacket.Zone(key, normalizeShape(trigger.shape), zone.center.x, zone.center.y, zone.center.z, Math.max(0.1D, trigger.radius), Math.max(0.1D, trigger.height), Math.max(0.1D, trigger.size_x), Math.max(0.1D, trigger.size_y), Math.max(0.1D, trigger.size_z), visual.style != null ? visual.style : "auto", visual.show_default_zone, visual.texture, visual.texture_mode != null ? visual.texture_mode : "plane", visual.texture_fit != null ? visual.texture_fit : "stretch", Math.max(0.01D, visual.texture_repeat_x), Math.max(0.01D, visual.texture_repeat_y), visual.texture_scroll_u, visual.texture_scroll_v, visual.texture_offset_x, visual.texture_offset_y, visual.texture_offset_z, Math.max(0.05D, visual.texture_scale_x), Math.max(0.05D, visual.texture_scale_y), visual.texture_rotation_x, visual.texture_rotation, visual.texture_rotation_z, visual.color != null ? visual.color : "cyan", Mth.clamp(visual.alpha, 0.0F, 1.0F), visual.y_offset, Math.max(0.0D, visual.size), Math.max(0.0D, visual.visual_height), visual.fill_enabled, visual.fill_mode != null ? visual.fill_mode : "gradient", visual.fill_color_bottom != null ? visual.fill_color_bottom : "cyan", visual.fill_color_top != null ? visual.fill_color_top : "cyan", Mth.clamp(visual.fill_alpha_bottom, 0.0F, 1.0F), Mth.clamp(visual.fill_alpha_top, 0.0F, 1.0F), visual.pulse, Math.max(0.0D, visual.pulse_amplitude), Math.max(0.0D, visual.pulse_speed), visual.bob, Math.max(0.0D, visual.bob_amplitude), Math.max(0.0D, visual.bob_speed), visual.rotate, visual.rotate_speed, visual.alpha_breathe, Mth.clamp(visual.alpha_breathe_amount, 0.0D, 1.0D), Math.max(0.0D, visual.alpha_breathe_speed), previewDistance));
 
                     if (previews.size() >= MAX_ZONE_PREVIEWS) {
                         DialogueNetwork.syncZones(player, previews);
@@ -407,6 +363,213 @@ public final class DialogueTriggerEngine {
         }
 
         DialogueNetwork.syncZones(player, previews);
+    }
+
+
+    private static void syncInteractiveMarkers(ServerPlayer player) {
+        if (DialogueSessionManager.isActive(player)) {
+            DialogueNetwork.syncInteractiveMarkers(player, List.of());
+            return;
+        }
+
+        List<DialogueInteractiveMarkerS2CPacket.Marker> result = new ArrayList<>();
+
+        for (Map.Entry<ResourceLocation, DialogueDefinition> entry : DialogueRegistry.entries().entrySet()) {
+            ResourceLocation dialogueId = entry.getKey();
+            DialogueDefinition definition = entry.getValue();
+
+            if (definition.triggers == null) {
+                continue;
+            }
+
+            for (int triggerIndex = 0; triggerIndex < definition.triggers.size(); triggerIndex++) {
+                DialogueDefinition.Trigger trigger = definition.triggers.get(triggerIndex);
+
+                if (trigger == null || trigger.type == null || !dimensionMatches(player, trigger)) {
+                    continue;
+                }
+
+                DialogueDefinition.InteractiveMarker marker = trigger.interactive_marker;
+
+                if (marker == null || !marker.enabled) {
+                    continue;
+                }
+
+                List<ResolvedMarker> resolved = resolveInteractiveMarkers(player, trigger, marker);
+
+                for (ResolvedMarker resolvedMarker : resolved) {
+                    String once = trigger.once != null ? trigger.once : definition.once;
+
+                    if (DialogueSessionManager.hasSeen(player, resolvedMarker.source, dialogueId, once)) {
+                        continue;
+                    }
+
+                    String key = dialogueId + "|" + triggerIndex + "|" + resolvedMarker.key;
+
+                    result.add(new DialogueInteractiveMarkerS2CPacket.Marker(key, resolvedMarker.source != null ? resolvedMarker.source.getId() : -1, resolvedMarker.center.x, resolvedMarker.center.y, resolvedMarker.center.z, marker.texture != null && !marker.texture.isBlank() ? marker.texture : "dlgstd:textures/gui/dialogue/interactive_arrow.png", Math.max(0.10D, marker.size), marker.y_offset, Mth.clamp(marker.preview_distance, 1.0D, 64.0D), marker.animated, marker.bob, Mth.clamp(marker.bob_amplitude, 0.0D, 4.0D), Mth.clamp(marker.bob_speed, 0.0D, 8.0D), marker.pulse, Mth.clamp(marker.pulse_amount, 0.0D, 0.75D), Mth.clamp(marker.pulse_speed, 0.0D, 8.0D), marker.sway, Mth.clamp(marker.sway_degrees, 0.0D, 45.0D), Mth.clamp(marker.sway_speed, 0.0D, 8.0D)));
+
+                    if (result.size() >= MAX_INTERACTIVE_MARKERS) {
+                        DialogueNetwork.syncInteractiveMarkers(player, result);
+                        return;
+                    }
+                }
+            }
+        }
+
+        DialogueNetwork.syncInteractiveMarkers(player, result);
+    }
+
+
+    private static List<ResolvedMarker> resolveInteractiveMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger, DialogueDefinition.InteractiveMarker marker) {
+        if ("absolute".equalsIgnoreCase(marker.anchor)) {
+            if (marker.x == null || marker.y == null || marker.z == null) {
+                return List.of();
+            }
+
+            return List.of(new ResolvedMarker(new Vec3(marker.x, marker.y, marker.z), null, "absolute:" + marker.x + ":" + marker.y + ":" + marker.z));
+        }
+
+        String type = trigger.type != null ? trigger.type.toLowerCase(Locale.ROOT) : "manual";
+
+        List<ResolvedMarker> resolved = switch (type) {
+            case "right_click_entity", "proximity_entity", "hit_entity", "shift_near_entity", "look_at_entity",
+                 "kill_entity" -> resolveEntityMarkers(player, trigger, marker);
+
+            case "right_click_block", "proximity_block" -> resolveBlockMarkers(player, trigger, marker);
+
+            case "zone" -> resolveZoneMarkers(player, trigger);
+
+            case "enter_area" -> resolveAreaMarker(trigger);
+
+            default -> List.of();
+        };
+
+        if (resolved.size() <= 1 || "all".equalsIgnoreCase(marker.pick)) {
+            return resolved;
+        }
+
+        ResolvedMarker nearest = resolved.stream().min(Comparator.comparingDouble(value -> player.position().distanceToSqr(value.center))).orElse(null);
+
+        return nearest != null ? List.of(nearest) : List.of();
+    }
+
+
+    private static List<ResolvedMarker> resolveEntityMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger, DialogueDefinition.InteractiveMarker marker) {
+        double distance = Mth.clamp(marker.preview_distance, 1.0D, 64.0D);
+        AABB box = player.getBoundingBox().inflate(distance);
+
+        List<Entity> entities = player.serverLevel().getEntities(player, box, entity -> entity.isAlive() && matchesEntity(entity, trigger.target));
+
+        entities.sort(Comparator.comparingDouble(player::distanceToSqr));
+
+        int count = "all".equalsIgnoreCase(marker.pick) ? Math.min(entities.size(), 64) : Math.min(entities.size(), 1);
+
+        List<ResolvedMarker> result = new ArrayList<>(count);
+
+        for (int i = 0; i < count; i++) {
+            Entity entity = entities.get(i);
+
+            result.add(new ResolvedMarker(new Vec3(entity.getX(), entity.getY() + entity.getBbHeight(), entity.getZ()), entity, "entity:" + entity.getUUID()));
+        }
+
+        return result;
+    }
+
+
+    private static List<ResolvedMarker> resolveBlockMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger, DialogueDefinition.InteractiveMarker marker) {
+        ServerLevel level = player.serverLevel();
+
+        double distance = Mth.clamp(marker.preview_distance, 1.0D, 32.0D);
+        int horizontal = Mth.clamp((int) Math.ceil(distance), 1, 32);
+        int vertical = Mth.clamp(horizontal, 1, 12);
+
+        BlockPos center = player.blockPosition();
+
+        boolean all = "all".equalsIgnoreCase(marker.pick);
+        ResolvedMarker nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+        List<ResolvedMarker> result = all ? new ArrayList<>() : null;
+
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-horizontal, -vertical, -horizontal), center.offset(horizontal, vertical, horizontal))) {
+            BlockState state = level.getBlockState(pos);
+
+            if (!matchesBlock(state, trigger.target)) {
+                continue;
+            }
+
+            Vec3 markerCenter = new Vec3(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D);
+
+            double distanceSqr = player.position().distanceToSqr(markerCenter);
+
+            if (distanceSqr > distance * distance) {
+                continue;
+            }
+
+            ResolvedMarker candidate = new ResolvedMarker(markerCenter, null, "block:" + pos.asLong());
+
+            if (all) {
+                result.add(candidate);
+
+                if (result.size() >= 64) {
+                    break;
+                }
+            } else if (distanceSqr < nearestDistance) {
+                nearestDistance = distanceSqr;
+                nearest = candidate;
+            }
+        }
+
+        if (all) {
+            result.sort(Comparator.comparingDouble(value -> player.position().distanceToSqr(value.center)));
+            return result;
+        }
+
+        return nearest != null ? List.of(nearest) : List.of();
+    }
+
+
+    private static List<ResolvedMarker> resolveZoneMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger) {
+        List<ResolvedZone> zones = resolveZoneAnchors(player, trigger, true);
+
+        if (zones.isEmpty()) {
+            return List.of();
+        }
+
+        List<ResolvedMarker> result = new ArrayList<>(zones.size());
+
+        for (ResolvedZone zone : zones) {
+            if (zone.source != null) {
+                Entity source = zone.source;
+
+                result.add(new ResolvedMarker(new Vec3(source.getX(), source.getY() + source.getBbHeight(), source.getZ()), source, zone.key));
+
+                continue;
+            }
+
+            double topOffset = switch (normalizeShape(trigger.shape)) {
+                case "sphere" -> Math.max(0.1D, trigger.radius);
+                case "box" -> Math.max(0.1D, trigger.size_y);
+                default -> Math.max(0.1D, trigger.height);
+            };
+
+            result.add(new ResolvedMarker(zone.center.add(0.0D, topOffset, 0.0D), null, zone.key));
+        }
+
+        return result;
+    }
+
+
+    private static List<ResolvedMarker> resolveAreaMarker(DialogueDefinition.Trigger trigger) {
+        if (trigger.min_x != null && trigger.min_y != null && trigger.min_z != null && trigger.max_x != null && trigger.max_y != null && trigger.max_z != null) {
+
+            return List.of(new ResolvedMarker(new Vec3((trigger.min_x + trigger.max_x) * 0.5D, trigger.max_y, (trigger.min_z + trigger.max_z) * 0.5D), null, "area_box"));
+        }
+
+        if (trigger.x != null && trigger.y != null && trigger.z != null) {
+            return List.of(new ResolvedMarker(new Vec3(trigger.x, trigger.y + Math.max(0.1D, trigger.radius), trigger.z), null, "area_sphere"));
+        }
+
+        return List.of();
     }
 
 
@@ -804,6 +967,10 @@ public final class DialogueTriggerEngine {
 
 
     private record ResolvedZone(Vec3 center, Entity source, String key) {
+    }
+
+
+    private record ResolvedMarker(Vec3 center, Entity source, String key) {
     }
 
 

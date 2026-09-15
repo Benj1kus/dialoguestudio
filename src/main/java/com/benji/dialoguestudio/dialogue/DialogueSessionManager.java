@@ -75,6 +75,25 @@ public final class DialogueSessionManager {
         return ACTIVE.containsKey(player.getUUID());
     }
 
+    public static boolean hasSeen(ServerPlayer player, Entity source, ResourceLocation dialogueId, String onceMode) {
+        return DialogueOnceTracker.hasSeen(player, source, dialogueId, onceMode);
+    }
+
+    public static void skip(ServerPlayer player, UUID sessionId) {
+        Session session = ACTIVE.get(player.getUUID());
+
+        if (session == null || !session.sessionId.equals(sessionId)) {
+            return;
+        }
+
+        if (!session.definition.hasGraph()) {
+            remove(player, session, true, true);
+            return;
+        }
+
+        skipGraph(player, session);
+    }
+
     public static void finish(ServerPlayer player, UUID sessionId) {
         Session session = ACTIVE.get(player.getUUID());
 
@@ -149,6 +168,137 @@ public final class DialogueSessionManager {
 
         resolveGraph(player, session, choice.goto_node);
     }
+
+    private static void skipGraph(ServerPlayer player, Session session) {
+        Entity source = session.resolveSource(player.getServer());
+
+        String nodeId = session.currentNode;
+
+        /*
+         * The currently visible node already ran its node.actions when it was
+         * entered through resolveGraph(), so do not execute them twice.
+         */
+        if (nodeId != null) {
+            DialogueDefinition.Node current = session.definition.nodes.get(nodeId);
+
+            if (current == null) {
+                remove(player, session, true, true);
+                return;
+            }
+
+            String type = current.type != null ? current.type.toLowerCase(Locale.ROOT) : "line";
+
+            if ("choice".equals(type)) {
+                DialogueDefinition.Choice choice = firstAvailableChoice(player, source, session, current);
+
+                if (choice == null) {
+                    remove(player, session, true, true);
+                    return;
+                }
+
+                DialogueGraphLogic.runActions(player, source, session.dialogueId, nodeId, choice.actions);
+
+                if (ACTIVE.get(player.getUUID()) != session) {
+                    return;
+                }
+
+                nodeId = choice.goto_node;
+            } else if ("condition".equals(type)) {
+                boolean pass = DialogueGraphLogic.conditionsPass(player, source, session.dialogueId, current.conditions);
+                nodeId = pass ? current.next : current.else_node;
+            } else {
+                nodeId = current.next;
+            }
+        } else {
+            nodeId = session.definition.start_node;
+        }
+
+        for (int step = 0; step < MAX_GRAPH_AUTO_STEPS; step++) {
+            if (nodeId == null || nodeId.isBlank()) {
+                remove(player, session, true, true);
+                return;
+            }
+
+            DialogueDefinition.Node node = session.definition.nodes.get(nodeId);
+
+            if (node == null) {
+                remove(player, session, true, true);
+                return;
+            }
+
+            session.currentNode = nodeId;
+
+            /*
+             * Future nodes were never entered, therefore their actions still
+             * have to run when the player skips the dialogue.
+             */
+            DialogueGraphLogic.runActions(player, source, session.dialogueId, nodeId, node.actions);
+
+            if (ACTIVE.get(player.getUUID()) != session) {
+                return;
+            }
+
+            String type = node.type != null ? node.type.toLowerCase(Locale.ROOT) : "line";
+
+            switch (type) {
+                case "line", "event" -> nodeId = node.next;
+
+                case "condition" -> {
+                    boolean pass = DialogueGraphLogic.conditionsPass(player, source, session.dialogueId, node.conditions);
+                    nodeId = pass ? node.next : node.else_node;
+                }
+
+                case "choice" -> {
+                    DialogueDefinition.Choice choice = firstAvailableChoice(player, source, session, node);
+
+                    if (choice == null) {
+                        remove(player, session, true, true);
+                        return;
+                    }
+
+                    DialogueGraphLogic.runActions(player, source, session.dialogueId, nodeId, choice.actions);
+
+                    if (ACTIVE.get(player.getUUID()) != session) {
+                        return;
+                    }
+
+                    nodeId = choice.goto_node;
+                }
+
+                case "end" -> {
+                    remove(player, session, true, true);
+                    return;
+                }
+
+                default -> {
+                    remove(player, session, true, true);
+                    return;
+                }
+            }
+        }
+
+        /*
+         * Broken/looping graph: fail closed instead of allowing a skip packet
+         * to spin forever on the server.
+         */
+        remove(player, session, true, true);
+    }
+
+
+    private static DialogueDefinition.Choice firstAvailableChoice(ServerPlayer player, Entity source, Session session, DialogueDefinition.Node node) {
+        if (node.choices == null || node.choices.isEmpty()) {
+            return null;
+        }
+
+        for (DialogueDefinition.Choice choice : node.choices) {
+            if (choice != null && DialogueGraphLogic.conditionsPass(player, source, session.dialogueId, choice.conditions)) {
+                return choice;
+            }
+        }
+
+        return null;
+    }
+
 
     private static void resolveGraph(ServerPlayer player, Session session, String requestedNode) {
         String nodeId = requestedNode;

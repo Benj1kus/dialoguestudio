@@ -1,4 +1,8 @@
 {
   "key.dlgstd.dialogue_editor": "Open Dialogue Studio",
-  "key.categories.dlgstd": "Dialogue Studio"
+  "key.categories.dlgstd": "Dialogue Studio",
+
+  "key.dlgstd.skip_dialogue": "Skip dialogue",
+  "key.categories.dlgstd": "Dialogue Studio",
+
 }

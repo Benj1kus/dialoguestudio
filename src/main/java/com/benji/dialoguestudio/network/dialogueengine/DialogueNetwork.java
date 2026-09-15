@@ -12,7 +12,7 @@ import java.util.UUID;
 
 public final class DialogueNetwork {
 
-    private static final String PROTOCOL = "3";
+    private static final String PROTOCOL = "4";
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "dialogue_engine"), () -> PROTOCOL, PROTOCOL::equals, PROTOCOL::equals);
 
@@ -28,6 +28,8 @@ public final class DialogueNetwork {
         CHANNEL.registerMessage(4, DialogueNodeStateS2CPacket.class, DialogueNodeStateS2CPacket::encode, DialogueNodeStateS2CPacket::decode, DialogueNodeStateS2CPacket::handle);
         CHANNEL.registerMessage(5, DialogueNodeAdvanceC2SPacket.class, DialogueNodeAdvanceC2SPacket::encode, DialogueNodeAdvanceC2SPacket::decode, DialogueNodeAdvanceC2SPacket::handle);
         CHANNEL.registerMessage(6, DialogueChoiceC2SPacket.class, DialogueChoiceC2SPacket::encode, DialogueChoiceC2SPacket::decode, DialogueChoiceC2SPacket::handle);
+        CHANNEL.registerMessage(7, DialogueSkipC2SPacket.class, DialogueSkipC2SPacket::encode, DialogueSkipC2SPacket::decode, DialogueSkipC2SPacket::handle);
+        CHANNEL.registerMessage(8, DialogueInteractiveMarkerS2CPacket.class, DialogueInteractiveMarkerS2CPacket::encode, DialogueInteractiveMarkerS2CPacket::decode, DialogueInteractiveMarkerS2CPacket::handle);
     }
 
 
@@ -41,6 +43,11 @@ public final class DialogueNetwork {
     }
 
 
+    public static void skip(UUID sessionId) {
+        CHANNEL.sendToServer(new DialogueSkipC2SPacket(sessionId));
+    }
+
+
     public static void stop(ServerPlayer player, UUID sessionId) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new DialogueEngineStopS2CPacket(sessionId));
     }
@@ -48,6 +55,11 @@ public final class DialogueNetwork {
 
     public static void syncZones(ServerPlayer player, List<DialogueZonePreviewS2CPacket.Zone> zones) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new DialogueZonePreviewS2CPacket(zones));
+    }
+
+
+    public static void syncInteractiveMarkers(ServerPlayer player, List<DialogueInteractiveMarkerS2CPacket.Marker> markers) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new DialogueInteractiveMarkerS2CPacket(markers));
     }
 
 

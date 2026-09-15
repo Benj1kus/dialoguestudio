@@ -7,7 +7,7 @@ import java.util.Map;
 
 public class DialogueDefinition {
 
-    public int format = 3;
+    public int format = 4;
 
     public String voice;
     public String voice_source = "master";
@@ -310,6 +310,50 @@ public class DialogueDefinition {
         public double size_y = 2.0D;
         public double size_z = 6.0D;
         public ZoneVisual visual = new ZoneVisual();
+        public InteractiveMarker interactive_marker = new InteractiveMarker();
+    }
+
+
+    public static class InteractiveMarker {
+        public boolean enabled = false;
+
+        public String texture = "dlgstd:textures/gui/dialogue/interactive_arrow.png";
+
+        /*
+         * auto:
+         * - entity triggers -> matching entities
+         * - block triggers -> matching blocks
+         * - zone -> resolved zone anchor
+         * - enter_area -> area center
+         *
+         * absolute:
+         * - use x/y/z below, which also makes manual/external triggers
+         *   capable of showing a marker.
+         */
+        public String anchor = "auto";
+        public String pick = "nearest";
+
+        public double size = 0.85D;
+        public double y_offset = 0.35D;
+        public double preview_distance = 20.0D;
+
+        public Double x;
+        public Double y;
+        public Double z;
+
+        public boolean animated = true;
+
+        public boolean bob = true;
+        public double bob_amplitude = 0.18D;
+        public double bob_speed = 1.15D;
+
+        public boolean pulse = true;
+        public double pulse_amount = 0.08D;
+        public double pulse_speed = 1.40D;
+
+        public boolean sway = false;
+        public double sway_degrees = 6.0D;
+        public double sway_speed = 0.90D;
     }
 
 

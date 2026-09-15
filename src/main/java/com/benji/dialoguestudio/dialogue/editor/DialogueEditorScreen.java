@@ -493,7 +493,63 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         cycleNullableButton("Once override", t.once, 6, List.of("never", "player", "entity", "session"), s -> t.once = s);
         field("Dimension (blank = any)", nullToEmpty(t.dimension), 7, s -> t.dimension = blankToNull(s), 128);
         field("External event id", nullToEmpty(t.event), 8, s -> t.event = blankToNull(s), 128);
-        help(10, "For zone triggers use the Zone and Zone FX tabs for visual editing.");
+
+        if (t.interactive_marker == null) {
+            t.interactive_marker = new DialogueDefinition.InteractiveMarker();
+        }
+
+        DialogueDefinition.InteractiveMarker marker = t.interactive_marker;
+
+        toggleButton("Interactive marker", marker.enabled, 9, value -> marker.enabled = value);
+
+        if (!marker.enabled) {
+            help(11, "Optional world-space marker. Enable it to show an interactive arrow above this trigger.");
+            help(12, "Auto resolves entity/block/zone/area triggers. Manual and external triggers can use Absolute marker coordinates.");
+            return;
+        }
+
+        assetField("Interactive marker PNG", marker.texture, 10, ".png", false, value -> marker.texture = value == null || value.isBlank() ? "dlgstd:textures/gui/dialogue/interactive_arrow.png" : value);
+
+        cycleButton("Marker anchor", marker.anchor, 11, List.of("auto", "absolute"), value -> marker.anchor = value);
+        cycleButton("Marker pick", marker.pick, 12, List.of("nearest", "all"), value -> marker.pick = value);
+
+        smallFields("Marker size", String.valueOf(marker.size), value -> marker.size = Math.max(0.10D, d(value, marker.size)), "Y offset", String.valueOf(marker.y_offset), value -> marker.y_offset = d(value, marker.y_offset), 13);
+
+        slider("Marker preview distance", marker.preview_distance, 1.0D, 64.0D, 14, value -> marker.preview_distance = value);
+
+        toggleButton("Marker animations", marker.animated, 15, value -> marker.animated = value);
+
+        int row = 16;
+
+        if (marker.animated) {
+            toggleButton("Bob / levitation", marker.bob, row++, value -> marker.bob = value);
+
+            if (marker.bob) {
+                slider("Bob height", marker.bob_amplitude, 0.0D, 1.5D, row++, value -> marker.bob_amplitude = value);
+                slider("Bob speed", marker.bob_speed, 0.05D, 4.0D, row++, value -> marker.bob_speed = value);
+            }
+
+            toggleButton("Pulse", marker.pulse, row++, value -> marker.pulse = value);
+
+            if (marker.pulse) {
+                slider("Pulse amount", marker.pulse_amount, 0.0D, 0.50D, row++, value -> marker.pulse_amount = value);
+                slider("Pulse speed", marker.pulse_speed, 0.05D, 4.0D, row++, value -> marker.pulse_speed = value);
+            }
+
+            toggleButton("Sway", marker.sway, row++, value -> marker.sway = value);
+
+            if (marker.sway) {
+                slider("Sway degrees", marker.sway_degrees, 0.0D, 30.0D, row++, value -> marker.sway_degrees = value);
+                slider("Sway speed", marker.sway_speed, 0.05D, 4.0D, row++, value -> marker.sway_speed = value);
+            }
+        }
+
+        if ("absolute".equalsIgnoreCase(marker.anchor)) {
+            tripleFields("Marker X", nullable(marker.x), value -> marker.x = nd(value), "Y", nullable(marker.y), value -> marker.y = nd(value), "Z", nullable(marker.z), value -> marker.z = nd(value), row++);
+        }
+
+        help(row + 1, "Default texture: dlgstd:.../interactive_arrow.png. Browse imports a custom PNG and export includes it automatically.");
+        help(row + 2, "Animations are client-side only: bob, pulse and sway do not affect trigger hitboxes or multiplayer logic.");
     }
 
     private void initZone() {
@@ -925,9 +981,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         button("Install into current instance/world", 4, b -> {
             try {
                 DialogueEditorExporter.installToCurrentInstance(project);
-                STATUS = minecraft.getSingleplayerServer() != null
-                        ? "Installed. Enable DialogueStudio_* resource pack and run /reload."
-                        : "Resource pack installed locally. Datapack install requires singleplayer.";
+                STATUS = minecraft.getSingleplayerServer() != null ? "Installed. Enable DialogueStudio_* resource pack and run /reload." : "Resource pack installed locally. Datapack install requires singleplayer.";
             } catch (Exception e) {
                 STATUS = "Install failed: " + e.getMessage();
             }
@@ -1122,6 +1176,12 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         cursorY += drawWrappedText(graphics, "type: " + t.type, x + 9, cursorY, textWidth, 0xFFFFFFFF, 1);
         cursorY += 2;
         cursorY += drawWrappedText(graphics, "target: " + (target != null ? target : "<none>"), x + 9, cursorY, textWidth, 0xFFCFC6A6, 2);
+
+        if (t.interactive_marker != null && t.interactive_marker.enabled) {
+            cursorY += 2;
+            String markerText = "marker: " + (t.interactive_marker.anchor != null ? t.interactive_marker.anchor : "auto") + "  " + (t.interactive_marker.animated ? "animated" : "static");
+            cursorY += drawWrappedText(graphics, markerText, x + 9, cursorY, textWidth, 0xFF42F2E1, 2);
+        }
 
         if ("zone".equalsIgnoreCase(t.type)) {
             cursorY += 2;
@@ -2040,7 +2100,8 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
             case DIALOGUE -> 18;
             case VISUALS -> 9;
             case LINES -> 13;
-            case LINE_OVERRIDES, LAYOUT, TRIGGERS -> 10;
+            case LINE_OVERRIDES, LAYOUT -> 10;
+            case TRIGGERS -> 32;
             case ZONE_FX -> 36;
             case NODES -> 13;
             case ZONE -> 12;
@@ -2347,6 +2408,19 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
             return "Entity/block registry id or #tag matched by this trigger. Registry opens a visual browser.";
         if (key.contains("radius")) return "Trigger/zone radius in Minecraft blocks.";
         if (key.contains("cooldown")) return "Ticks before this trigger instance can activate again.";
+        if (key.contains("interactive marker png"))
+            return "World-space interaction marker texture. Blank/reset uses Dialogue Studio interactive_arrow.png; Browse imports your own PNG.";
+        if (key.contains("interactive marker"))
+            return "Shows a world-space icon above the trigger so players can recognize that it has dialogue.";
+        if (key.contains("marker anchor"))
+            return "Auto follows the trigger target. Absolute uses the Marker X/Y/Z fields and works with manual/external triggers too.";
+        if (key.contains("marker pick"))
+            return "Nearest shows one matching target; All shows markers above multiple matching targets within preview distance.";
+        if (key.contains("marker preview distance"))
+            return "Maximum distance in blocks at which this player's client receives and renders the marker.";
+        if (key.contains("bob")) return "Smooth vertical levitation animation for the interaction marker.";
+        if (key.contains("pulse")) return "Smooth size breathing/pulse animation for the interaction marker.";
+        if (key.contains("sway")) return "Gentle left/right rotation around the marker center.";
         if (key.contains("dimension"))
             return "Optional dimension id, e.g. minecraft:overworld. Blank means any dimension.";
         if (key.contains("anchor type"))

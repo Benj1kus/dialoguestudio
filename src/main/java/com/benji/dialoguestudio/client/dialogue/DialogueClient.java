@@ -39,6 +39,19 @@ public final class DialogueClient {
 
     private static final ResourceLocation DEFAULT_BACKGROUND = ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/dithering_gradient.png");
 
+    private static final int SKIP_HOLD_TICKS = 24;
+
+    private static final ResourceLocation[] SKIP_LOADING_FRAMES = new ResourceLocation[]{
+            ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/loading1.png"),
+            ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/loading2.png"),
+            ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/loading3.png"),
+            ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/loading4.png"),
+            ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/loading5.png"),
+            ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/loading6.png"),
+            ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/loading7.png"),
+            ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/loading8.png")
+    };
+
     private static DialogueDefinition definition;
 
     private static UUID sessionId;
@@ -72,6 +85,9 @@ public final class DialogueClient {
     private static int spriteTransitionAge = 1000;
 
     private static int voiceLetterCounter;
+
+    private static int skipHoldTicks;
+    private static boolean screenSkipHeld;
 
     private DialogueClient() {
     }
@@ -118,6 +134,9 @@ public final class DialogueClient {
             spriteMoveAge = 1000;
 
             voiceLetterCounter = 0;
+
+            skipHoldTicks = 0;
+            screenSkipHeld = false;
 
             if (!graph) {
                 updateCurrentText();
@@ -222,6 +241,10 @@ public final class DialogueClient {
             return;
         }
 
+        if (tickSkipInput()) {
+            return;
+        }
+
         totalTicks++;
         spriteMoveAge++;
         spriteTransitionAge++;
@@ -268,6 +291,41 @@ public final class DialogueClient {
 
         if (holdTicks >= getHoldTicks()) {
             advanceLegacyLine();
+        }
+    }
+
+
+    private static boolean tickSkipInput() {
+        boolean held = screenSkipHeld || DialogueClientKeyMappings.SKIP_DIALOGUE.isDown();
+
+        if (!held) {
+            skipHoldTicks = 0;
+            return false;
+        }
+
+        skipHoldTicks = Math.min(SKIP_HOLD_TICKS, skipHoldTicks + 1);
+
+        if (skipHoldTicks < SKIP_HOLD_TICKS) {
+            return false;
+        }
+
+        UUID skippedSession = sessionId;
+
+        reset();
+
+        if (skippedSession != null) {
+            DialogueNetwork.skip(skippedSession);
+        }
+
+        return true;
+    }
+
+
+    public static void setSkipInputHeld(boolean held) {
+        screenSkipHeld = held;
+
+        if (!held && !DialogueClientKeyMappings.SKIP_DIALOGUE.isDown()) {
+            skipHoldTicks = 0;
         }
     }
 
@@ -430,6 +488,10 @@ public final class DialogueClient {
         spriteMoveAge = 1000;
 
         voiceLetterCounter = 0;
+
+        skipHoldTicks = 0;
+        screenSkipHeld = false;
+
         active = false;
     }
 
@@ -537,6 +599,47 @@ public final class DialogueClient {
         renderBackground(graphics, time, alpha);
 
         renderDialogue(graphics, minecraft.font, time, partialTick, alpha);
+        renderSkipLoading(graphics, partialTick);
+    }
+
+
+    private static void renderSkipLoading(GuiGraphics graphics, float partialTick) {
+        if (skipHoldTicks <= 0 || SKIP_LOADING_FRAMES.length == 0) {
+            return;
+        }
+
+        float progress = Mth.clamp(
+                (skipHoldTicks + partialTick) / (float) SKIP_HOLD_TICKS,
+                0.0F,
+                1.0F
+        );
+
+        int frame = Math.min(
+                SKIP_LOADING_FRAMES.length - 1,
+                (int) Math.floor(progress * SKIP_LOADING_FRAMES.length)
+        );
+
+        int size = 16;
+
+        int x = (graphics.guiWidth() - size) / 2;
+        int y = (graphics.guiHeight() - size) / 2;
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
+        graphics.blit(
+                SKIP_LOADING_FRAMES[frame],
+                x,
+                y,
+                0.0F,
+                0.0F,
+                size,
+                size,
+                16,
+                16
+        );
+
+        RenderSystem.disableBlend();
     }
 
 

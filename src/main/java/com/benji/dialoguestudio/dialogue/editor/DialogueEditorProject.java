@@ -124,6 +124,7 @@ public class DialogueEditorProject {
 
         for (DialogueDefinition.Trigger trigger : definition.triggers) {
             normalizeZoneVisual(trigger);
+            normalizeInteractiveMarker(trigger);
         }
 
         normalizeGraph();
@@ -175,6 +176,52 @@ public class DialogueEditorProject {
         visual.alpha_breathe_speed = Math.max(0.0D, visual.alpha_breathe_speed);
         visual.preview_distance = Math.max(1.0D, visual.preview_distance);
     }
+
+
+    private static void normalizeInteractiveMarker(DialogueDefinition.Trigger trigger) {
+        if (trigger == null) {
+            return;
+        }
+
+        if (trigger.interactive_marker == null) {
+            trigger.interactive_marker = new DialogueDefinition.InteractiveMarker();
+        }
+
+        DialogueDefinition.InteractiveMarker marker = trigger.interactive_marker;
+
+        if (marker.texture == null || marker.texture.isBlank()) {
+            marker.texture = "dlgstd:textures/gui/dialogue/interactive_arrow.png";
+        }
+
+        if (marker.anchor == null || marker.anchor.isBlank()) {
+            marker.anchor = "auto";
+        }
+
+        if (!marker.anchor.equalsIgnoreCase("auto") && !marker.anchor.equalsIgnoreCase("absolute")) {
+            marker.anchor = "auto";
+        }
+
+        if (marker.pick == null || marker.pick.isBlank()) {
+            marker.pick = "nearest";
+        }
+
+        if (!marker.pick.equalsIgnoreCase("nearest") && !marker.pick.equalsIgnoreCase("all")) {
+            marker.pick = "nearest";
+        }
+
+        marker.size = Math.max(0.10D, Math.min(4.0D, marker.size));
+        marker.preview_distance = Math.max(1.0D, Math.min(64.0D, marker.preview_distance));
+
+        marker.bob_amplitude = Math.max(0.0D, Math.min(4.0D, marker.bob_amplitude));
+        marker.bob_speed = Math.max(0.0D, Math.min(8.0D, marker.bob_speed));
+
+        marker.pulse_amount = Math.max(0.0D, Math.min(0.75D, marker.pulse_amount));
+        marker.pulse_speed = Math.max(0.0D, Math.min(8.0D, marker.pulse_speed));
+
+        marker.sway_degrees = Math.max(0.0D, Math.min(45.0D, marker.sway_degrees));
+        marker.sway_speed = Math.max(0.0D, Math.min(8.0D, marker.sway_speed));
+    }
+
 
     private static void normalizeRichLine(DialogueDefinition.Line line) {
         if (line == null || line.rich_regions == null) {
