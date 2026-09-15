@@ -23,6 +23,13 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.renderer.GameRenderer;
 
 import java.util.List;
 import java.util.Locale;
@@ -115,14 +122,37 @@ public final class DialogueInteractiveMarkerRenderer {
         poseStack.mulPose(Axis.ZP.rotationDegrees(animation.sway));
 
         float half = (float) scale * 0.5F;
-        Matrix4f matrix = poseStack.last().pose();
-        Matrix3f normal = poseStack.last().normal();
-        VertexConsumer consumer = buffers.getBuffer(RenderType.entityTranslucentEmissive(texture));
 
-        vertex(consumer, matrix, normal, -half, -half, 0.0F, 0.0F, 1.0F);
-        vertex(consumer, matrix, normal, -half, half, 0.0F, 0.0F, 0.0F);
-        vertex(consumer, matrix, normal, half, half, 0.0F, 1.0F, 0.0F);
-        vertex(consumer, matrix, normal, half, -half, 0.0F, 1.0F, 1.0F);
+        RenderSystem.enableDepthTest();
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableCull();
+        RenderSystem.depthMask(false);
+
+        RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
+
+        RenderSystem.setShaderTexture(0, texture);
+
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+
+        BufferBuilder builder = Tesselator.getInstance().getBuilder();
+
+        builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+
+        Matrix4f matrix = poseStack.last().pose();
+
+        builder.vertex(matrix, -half, -half, 0.0F).uv(0.0F, 1.0F).color(255, 255, 255, 255).endVertex();
+        builder.vertex(matrix, -half, half, 0.0F).uv(0.0F, 0.0F).color(255, 255, 255, 255).endVertex();
+        builder.vertex(matrix, half, half, 0.0F).uv(1.0F, 0.0F).color(255, 255, 255, 255).endVertex();
+        builder.vertex(matrix, half, -half, 0.0F).uv(1.0F, 1.0F).color(255, 255, 255, 255).endVertex();
+
+        BufferUploader.drawWithShader(builder.end());
+
+        RenderSystem.depthMask(true);
+        RenderSystem.enableCull();
+        RenderSystem.disableBlend();
+
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 
         poseStack.popPose();
     }
