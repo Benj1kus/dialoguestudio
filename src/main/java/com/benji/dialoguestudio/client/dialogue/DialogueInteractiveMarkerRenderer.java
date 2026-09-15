@@ -152,12 +152,12 @@ public final class DialogueInteractiveMarkerRenderer {
 
         Font font = minecraft.font;
         float x = -font.width(text.text()) / 2.0F;
-        
+
         if (text.shadow()) {
-            font.drawInBatch(text.text(), x + 1.0F, 1.0F, shadowColor(color), false, poseStack.last().pose(), buffers, Font.DisplayMode.POLYGON_OFFSET, 0, LightTexture.FULL_BRIGHT);
+            font.drawInBatch(text.text(), x + 1.0F, 1.0F, shadowColor(color), false, poseStack.last().pose(), buffers, Font.DisplayMode.NORMAL, 0, LightTexture.FULL_BRIGHT);
         }
 
-        font.drawInBatch(text.text(), x, 0.0F, color, false, poseStack.last().pose(), buffers, Font.DisplayMode.NORMAL, background, LightTexture.FULL_BRIGHT);
+        font.drawInBatch(text.text(), x, 0.0F, color, false, poseStack.last().pose(), buffers, Font.DisplayMode.POLYGON_OFFSET, background, LightTexture.FULL_BRIGHT);
 
         poseStack.popPose();
     }
