@@ -152,10 +152,24 @@ public final class DialogueInteractiveMarkerRenderer {
 
         Font font = minecraft.font;
         float x = -font.width(text.text()) / 2.0F;
+        
+        if (text.shadow()) {
+            font.drawInBatch(text.text(), x + 1.0F, 1.0F, shadowColor(color), false, poseStack.last().pose(), buffers, Font.DisplayMode.POLYGON_OFFSET, 0, LightTexture.FULL_BRIGHT);
+        }
 
-        font.drawInBatch(text.text(), x, 0.0F, color, text.shadow(), poseStack.last().pose(), buffers, Font.DisplayMode.NORMAL, background, LightTexture.FULL_BRIGHT);
+        font.drawInBatch(text.text(), x, 0.0F, color, false, poseStack.last().pose(), buffers, Font.DisplayMode.NORMAL, background, LightTexture.FULL_BRIGHT);
 
         poseStack.popPose();
+    }
+
+
+    private static int shadowColor(int color) {
+        int alpha = color & 0xFF000000;
+        int red = ((color >> 16) & 0xFF) / 4;
+        int green = ((color >> 8) & 0xFF) / 4;
+        int blue = (color & 0xFF) / 4;
+
+        return alpha | (red << 16) | (green << 8) | blue;
     }
 
     private static Vec3 resolvePosition(Minecraft minecraft, int entityId, double x, double y, double z, float partialTick) {
