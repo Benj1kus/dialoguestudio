@@ -117,7 +117,7 @@ public final class DialogueInteractiveMarkerRenderer {
         float half = (float) scale * 0.5F;
         Matrix4f matrix = poseStack.last().pose();
         Matrix3f normal = poseStack.last().normal();
-        VertexConsumer consumer = buffers.getBuffer(RenderType.entityTranslucent(texture));
+        VertexConsumer consumer = buffers.getBuffer(RenderType.entityTranslucentEmissive(texture));
 
         vertex(consumer, matrix, normal, -half, -half, 0.0F, 0.0F, 1.0F);
         vertex(consumer, matrix, normal, -half, half, 0.0F, 0.0F, 0.0F);
