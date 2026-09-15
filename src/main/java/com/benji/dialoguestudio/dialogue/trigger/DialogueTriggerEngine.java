@@ -368,11 +368,12 @@ public final class DialogueTriggerEngine {
 
     private static void syncInteractiveMarkers(ServerPlayer player) {
         if (DialogueSessionManager.isActive(player)) {
-            DialogueNetwork.syncInteractiveMarkers(player, List.of());
+            DialogueNetwork.syncInteractiveMarkers(player, List.of(), List.of());
             return;
         }
 
-        List<DialogueInteractiveMarkerS2CPacket.Marker> result = new ArrayList<>();
+        List<DialogueInteractiveMarkerS2CPacket.Marker> markers = new ArrayList<>();
+        List<DialogueInteractiveMarkerS2CPacket.MarkerText> texts = new ArrayList<>();
 
         for (Map.Entry<ResourceLocation, DialogueDefinition> entry : DialogueRegistry.entries().entrySet()) {
             ResourceLocation dialogueId = entry.getKey();
@@ -389,38 +390,61 @@ public final class DialogueTriggerEngine {
                     continue;
                 }
 
+                String once = trigger.once != null ? trigger.once : definition.once;
+
                 DialogueDefinition.InteractiveMarker marker = trigger.interactive_marker;
 
-                if (marker == null || !marker.enabled) {
-                    continue;
+                if (marker != null && marker.enabled && markers.size() < MAX_INTERACTIVE_MARKERS) {
+                    List<ResolvedMarker> resolved = resolveInteractiveMarkers(player, trigger, marker);
+
+                    for (ResolvedMarker resolvedMarker : resolved) {
+                        if (DialogueSessionManager.hasSeen(player, resolvedMarker.source, dialogueId, once)) {
+                            continue;
+                        }
+
+                        String key = dialogueId + "|" + triggerIndex + "|marker|" + resolvedMarker.key;
+
+                        markers.add(new DialogueInteractiveMarkerS2CPacket.Marker(key, resolvedMarker.source != null ? resolvedMarker.source.getId() : -1, resolvedMarker.center.x, resolvedMarker.center.y, resolvedMarker.center.z, marker.texture != null && !marker.texture.isBlank() ? marker.texture : "dlgstd:textures/gui/dialogue/interactive_arrow.png", Math.max(0.10D, marker.size), marker.y_offset, Mth.clamp(marker.preview_distance, 1.0D, 64.0D), marker.animated, marker.bob, Mth.clamp(marker.bob_amplitude, 0.0D, 4.0D), Mth.clamp(marker.bob_speed, 0.0D, 8.0D), marker.pulse, Mth.clamp(marker.pulse_amount, 0.0D, 0.75D), Mth.clamp(marker.pulse_speed, 0.0D, 8.0D), marker.sway, Mth.clamp(marker.sway_degrees, 0.0D, 45.0D), Mth.clamp(marker.sway_speed, 0.0D, 8.0D)));
+
+                        if (markers.size() >= MAX_INTERACTIVE_MARKERS) {
+                            break;
+                        }
+                    }
                 }
 
-                List<ResolvedMarker> resolved = resolveInteractiveMarkers(player, trigger, marker);
+                DialogueDefinition.MarkerText markerText = trigger.marker_text;
 
-                for (ResolvedMarker resolvedMarker : resolved) {
-                    String once = trigger.once != null ? trigger.once : definition.once;
+                if (markerText != null && markerText.enabled && markerText.text != null && !markerText.text.isBlank() && texts.size() < MAX_INTERACTIVE_MARKERS) {
 
-                    if (DialogueSessionManager.hasSeen(player, resolvedMarker.source, dialogueId, once)) {
-                        continue;
+                    List<ResolvedMarker> resolved = resolveInteractiveMarkers(player, trigger, markerText);
+
+                    for (ResolvedMarker resolvedMarker : resolved) {
+                        if (DialogueSessionManager.hasSeen(player, resolvedMarker.source, dialogueId, once)) {
+                            continue;
+                        }
+
+                        String key = dialogueId + "|" + triggerIndex + "|text|" + resolvedMarker.key;
+
+                        texts.add(new DialogueInteractiveMarkerS2CPacket.MarkerText(key, resolvedMarker.source != null ? resolvedMarker.source.getId() : -1, resolvedMarker.center.x, resolvedMarker.center.y, resolvedMarker.center.z, markerText.text, markerText.color != null && !markerText.color.isBlank() ? markerText.color : "white", Mth.clamp(markerText.scale, 0.25D, 3.0D), markerText.shadow, markerText.background, Mth.clamp(markerText.background_alpha, 0.0F, 1.0F), markerText.y_offset, Mth.clamp(markerText.preview_distance, 1.0D, 64.0D), markerText.animated, markerText.bob, Mth.clamp(markerText.bob_amplitude, 0.0D, 4.0D), Mth.clamp(markerText.bob_speed, 0.0D, 8.0D), markerText.pulse, Mth.clamp(markerText.pulse_amount, 0.0D, 0.75D), Mth.clamp(markerText.pulse_speed, 0.0D, 8.0D), markerText.sway, Mth.clamp(markerText.sway_degrees, 0.0D, 45.0D), Mth.clamp(markerText.sway_speed, 0.0D, 8.0D)));
+
+                        if (texts.size() >= MAX_INTERACTIVE_MARKERS) {
+                            break;
+                        }
                     }
+                }
 
-                    String key = dialogueId + "|" + triggerIndex + "|" + resolvedMarker.key;
-
-                    result.add(new DialogueInteractiveMarkerS2CPacket.Marker(key, resolvedMarker.source != null ? resolvedMarker.source.getId() : -1, resolvedMarker.center.x, resolvedMarker.center.y, resolvedMarker.center.z, marker.texture != null && !marker.texture.isBlank() ? marker.texture : "dlgstd:textures/gui/dialogue/interactive_arrow.png", Math.max(0.10D, marker.size), marker.y_offset, Mth.clamp(marker.preview_distance, 1.0D, 64.0D), marker.animated, marker.bob, Mth.clamp(marker.bob_amplitude, 0.0D, 4.0D), Mth.clamp(marker.bob_speed, 0.0D, 8.0D), marker.pulse, Mth.clamp(marker.pulse_amount, 0.0D, 0.75D), Mth.clamp(marker.pulse_speed, 0.0D, 8.0D), marker.sway, Mth.clamp(marker.sway_degrees, 0.0D, 45.0D), Mth.clamp(marker.sway_speed, 0.0D, 8.0D)));
-
-                    if (result.size() >= MAX_INTERACTIVE_MARKERS) {
-                        DialogueNetwork.syncInteractiveMarkers(player, result);
-                        return;
-                    }
+                if (markers.size() >= MAX_INTERACTIVE_MARKERS && texts.size() >= MAX_INTERACTIVE_MARKERS) {
+                    DialogueNetwork.syncInteractiveMarkers(player, markers, texts);
+                    return;
                 }
             }
         }
 
-        DialogueNetwork.syncInteractiveMarkers(player, result);
+        DialogueNetwork.syncInteractiveMarkers(player, markers, texts);
     }
 
 
-    private static List<ResolvedMarker> resolveInteractiveMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger, DialogueDefinition.InteractiveMarker marker) {
+    private static List<ResolvedMarker> resolveInteractiveMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger, DialogueDefinition.WorldMarkerSettings marker) {
         if ("absolute".equalsIgnoreCase(marker.anchor)) {
             if (marker.x == null || marker.y == null || marker.z == null) {
                 return List.of();
@@ -454,7 +478,7 @@ public final class DialogueTriggerEngine {
     }
 
 
-    private static List<ResolvedMarker> resolveEntityMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger, DialogueDefinition.InteractiveMarker marker) {
+    private static List<ResolvedMarker> resolveEntityMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger, DialogueDefinition.WorldMarkerSettings marker) {
         double distance = Mth.clamp(marker.preview_distance, 1.0D, 64.0D);
         AABB box = player.getBoundingBox().inflate(distance);
 
@@ -476,7 +500,7 @@ public final class DialogueTriggerEngine {
     }
 
 
-    private static List<ResolvedMarker> resolveBlockMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger, DialogueDefinition.InteractiveMarker marker) {
+    private static List<ResolvedMarker> resolveBlockMarkers(ServerPlayer player, DialogueDefinition.Trigger trigger, DialogueDefinition.WorldMarkerSettings marker) {
         ServerLevel level = player.serverLevel();
 
         double distance = Mth.clamp(marker.preview_distance, 1.0D, 32.0D);

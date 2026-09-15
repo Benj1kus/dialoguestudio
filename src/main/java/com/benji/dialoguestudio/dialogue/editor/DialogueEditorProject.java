@@ -63,6 +63,8 @@ public class DialogueEditorProject {
             definition = new DialogueDefinition();
         }
 
+        definition.format = Math.max(definition.format, 5);
+
         if (definition.layout == null) {
             definition.layout = new DialogueDefinition.Layout();
         }
@@ -125,6 +127,7 @@ public class DialogueEditorProject {
         for (DialogueDefinition.Trigger trigger : definition.triggers) {
             normalizeZoneVisual(trigger);
             normalizeInteractiveMarker(trigger);
+            normalizeMarkerText(trigger);
         }
 
         normalizeGraph();
@@ -193,6 +196,38 @@ public class DialogueEditorProject {
             marker.texture = "dlgstd:textures/gui/dialogue/interactive_arrow.png";
         }
 
+        normalizeWorldMarkerSettings(marker);
+
+        marker.size = Math.max(0.10D, Math.min(4.0D, marker.size));
+    }
+
+
+    private static void normalizeMarkerText(DialogueDefinition.Trigger trigger) {
+        if (trigger == null) {
+            return;
+        }
+
+        if (trigger.marker_text == null) {
+            trigger.marker_text = new DialogueDefinition.MarkerText();
+        }
+
+        DialogueDefinition.MarkerText text = trigger.marker_text;
+        normalizeWorldMarkerSettings(text);
+
+        if (text.text == null) {
+            text.text = "";
+        }
+
+        if (text.color == null || text.color.isBlank()) {
+            text.color = "white";
+        }
+
+        text.scale = Math.max(0.25D, Math.min(3.0D, text.scale));
+        text.background_alpha = Math.max(0.0F, Math.min(1.0F, text.background_alpha));
+    }
+
+
+    private static void normalizeWorldMarkerSettings(DialogueDefinition.WorldMarkerSettings marker) {
         if (marker.anchor == null || marker.anchor.isBlank()) {
             marker.anchor = "auto";
         }
@@ -209,7 +244,7 @@ public class DialogueEditorProject {
             marker.pick = "nearest";
         }
 
-        marker.size = Math.max(0.10D, Math.min(4.0D, marker.size));
+        marker.y_offset = Math.max(-0.50D, Math.min(5.0D, marker.y_offset));
         marker.preview_distance = Math.max(1.0D, Math.min(64.0D, marker.preview_distance));
 
         marker.bob_amplitude = Math.max(0.0D, Math.min(4.0D, marker.bob_amplitude));

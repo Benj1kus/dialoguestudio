@@ -12,7 +12,7 @@ import java.util.UUID;
 
 public final class DialogueNetwork {
 
-    private static final String PROTOCOL = "4";
+    private static final String PROTOCOL = "5";
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "dialogue_engine"), () -> PROTOCOL, PROTOCOL::equals, PROTOCOL::equals);
 
@@ -58,8 +58,8 @@ public final class DialogueNetwork {
     }
 
 
-    public static void syncInteractiveMarkers(ServerPlayer player, List<DialogueInteractiveMarkerS2CPacket.Marker> markers) {
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new DialogueInteractiveMarkerS2CPacket(markers));
+    public static void syncInteractiveMarkers(ServerPlayer player, List<DialogueInteractiveMarkerS2CPacket.Marker> markers, List<DialogueInteractiveMarkerS2CPacket.MarkerText> texts) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new DialogueInteractiveMarkerS2CPacket(markers, texts));
     }
 
 

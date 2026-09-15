@@ -4,6 +4,7 @@ import com.benji.dialoguestudio.DialogueStudio;
 
 import com.benji.dialoguestudio.dialogue.DialogueRegistry;
 import com.benji.dialoguestudio.dialogue.data.DialogueDefinition;
+import com.mojang.math.Axis;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.Util;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -58,6 +59,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
     private static final EnumMap<Tab, Integer> SCROLL_BY_TAB = new EnumMap<>(Tab.class);
     private static int LINE_TIMELINE_SCROLL = 0;
     private static final ResourceLocation EDITOR_DEFAULT_SPRITE = ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/default_sprite.png");
+    private static final ResourceLocation EDITOR_DEFAULT_INTERACTIVE_MARKER = ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/interactive_arrow.png");
 
     private final DialogueEditorProject project;
     private final Tab tab;
@@ -485,72 +487,158 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
             reopen(tab);
         }, this::addTrigger, this::removeTrigger);
 
-        cycleButton("Type", t.type, 1, List.of("manual", "external", "right_click_entity", "right_click_block", "proximity_entity", "proximity_block", "hit_entity", "shift_near_entity", "look_at_entity", "kill_entity", "enter_area", "zone"), s -> t.type = s);
-        targetField("Target registry id / #tag", t.target, 2, s -> t.target = blankToNull(s));
-        smallFields("Radius", String.valueOf(t.radius), s -> t.radius = d(s, t.radius), "Look angle", String.valueOf(t.look_angle), s -> t.look_angle = d(s, t.look_angle), 3);
-        smallFields("Check interval", String.valueOf(t.check_interval), s -> t.check_interval = i(s, t.check_interval), "Cooldown", String.valueOf(t.cooldown_ticks), s -> t.cooldown_ticks = i(s, t.cooldown_ticks), 4);
+        cycleButton("Type", t.type, 1, List.of("manual", "external", "right_click_entity", "right_click_block", "proximity_entity", "proximity_block", "hit_entity", "shift_near_entity", "look_at_entity", "kill_entity", "enter_area", "zone"), value -> t.type = value);
+        targetField("Target registry id / #tag", t.target, 2, value -> t.target = blankToNull(value));
+        smallFields("Radius", String.valueOf(t.radius), value -> t.radius = d(value, t.radius), "Look angle", String.valueOf(t.look_angle), value -> t.look_angle = d(value, t.look_angle), 3);
+        smallFields("Check interval", String.valueOf(t.check_interval), value -> t.check_interval = i(value, t.check_interval), "Cooldown", String.valueOf(t.cooldown_ticks), value -> t.cooldown_ticks = i(value, t.cooldown_ticks), 4);
         toggleButton("Consume", t.consume, 5, value -> t.consume = value);
-        cycleNullableButton("Once override", t.once, 6, List.of("never", "player", "entity", "session"), s -> t.once = s);
-        field("Dimension (blank = any)", nullToEmpty(t.dimension), 7, s -> t.dimension = blankToNull(s), 128);
-        field("External event id", nullToEmpty(t.event), 8, s -> t.event = blankToNull(s), 128);
+        cycleNullableButton("Once override", t.once, 6, List.of("never", "player", "entity", "session"), value -> t.once = value);
+        field("Dimension (blank = any)", nullToEmpty(t.dimension), 7, value -> t.dimension = blankToNull(value), 128);
+        field("External event id", nullToEmpty(t.event), 8, value -> t.event = blankToNull(value), 128);
 
         if (t.interactive_marker == null) {
             t.interactive_marker = new DialogueDefinition.InteractiveMarker();
         }
 
+        if (t.marker_text == null) {
+            t.marker_text = new DialogueDefinition.MarkerText();
+        }
+
         DialogueDefinition.InteractiveMarker marker = t.interactive_marker;
+        DialogueDefinition.MarkerText markerText = t.marker_text;
 
-        toggleButton("Interactive marker", marker.enabled, 9, value -> marker.enabled = value);
+        int row = 9;
 
-        if (!marker.enabled) {
-            help(11, "Optional world-space marker. Enable it to show an interactive arrow above this trigger.");
-            help(12, "Auto resolves entity/block/zone/area triggers. Manual and external triggers can use Absolute marker coordinates.");
+        /*
+         * IMAGE MARKER
+         */
+        toggleButton("Interactive marker", marker.enabled, row++, value -> {
+            marker.enabled = value;
+            reopen(tab);
+        });
+
+        if (marker.enabled) {
+            assetField("Interactive marker PNG", marker.texture, row++, ".png", false, value -> marker.texture = value == null || value.isBlank() ? "dlgstd:textures/gui/dialogue/interactive_arrow.png" : value);
+
+            cycleButton("Marker anchor", marker.anchor, row++, List.of("auto", "absolute"), value -> {
+                marker.anchor = value;
+                reopen(tab);
+            });
+
+            cycleButton("Marker pick", marker.pick, row++, List.of("nearest", "all"), value -> marker.pick = value);
+
+            slider("Marker size", marker.size, 0.10D, 2.50D, row++, value -> marker.size = value);
+            slider("Marker height above target", marker.y_offset, -0.50D, 5.00D, row++, value -> marker.y_offset = value);
+            slider("Marker preview distance", marker.preview_distance, 1.0D, 64.0D, row++, value -> marker.preview_distance = value);
+
+            toggleButton("Marker animations", marker.animated, row++, value -> {
+                marker.animated = value;
+                reopen(tab);
+            });
+
+            if (marker.animated) {
+                row = initWorldMarkerAnimationControls(marker, row, "Marker");
+            }
+
+            if ("absolute".equalsIgnoreCase(marker.anchor)) {
+                tripleFields("Marker X", nullable(marker.x), value -> marker.x = nd(value), "Y", nullable(marker.y), value -> marker.y = nd(value), "Z", nullable(marker.z), value -> marker.z = nd(value), row++);
+            }
+
+            help(row++, "Height is now a slider in BLOCKS above the target top. Entity height and block top are resolved automatically.");
+            help(row++, "The Trigger / World Preview card on the right shows the real texture, height, bob, pulse and sway before export.");
+        } else {
+            help(row++, "Optional world-space image marker. Enable it to show an interactive arrow above this trigger.");
+        }
+
+        /*
+         * NAME-TAG STYLE TEXT MARKER
+         */
+        toggleButton("Marker text", markerText.enabled, row++, value -> {
+            markerText.enabled = value;
+            reopen(tab);
+        });
+
+        if (!markerText.enabled) {
+            help(row++, "Optional floating name-tag text above the trigger. It works with or without the image marker.");
             return;
         }
 
-        assetField("Interactive marker PNG", marker.texture, 10, ".png", false, value -> marker.texture = value == null || value.isBlank() ? "dlgstd:textures/gui/dialogue/interactive_arrow.png" : value);
+        field("Marker text value", markerText.text, row++, value -> markerText.text = value != null ? value : "", 256);
+        colorField("Marker text color", markerText.color, row++, value -> markerText.color = value == null || value.isBlank() ? "white" : value);
 
-        cycleButton("Marker anchor", marker.anchor, 11, List.of("auto", "absolute"), value -> marker.anchor = value);
-        cycleButton("Marker pick", marker.pick, 12, List.of("nearest", "all"), value -> marker.pick = value);
+        slider("Marker text scale", markerText.scale, 0.25D, 3.0D, row++, value -> markerText.scale = value);
+        slider("Text height above target", markerText.y_offset, -0.50D, 5.00D, row++, value -> markerText.y_offset = value);
+        slider("Text preview distance", markerText.preview_distance, 1.0D, 64.0D, row++, value -> markerText.preview_distance = value);
 
-        smallFields("Marker size", String.valueOf(marker.size), value -> marker.size = Math.max(0.10D, d(value, marker.size)), "Y offset", String.valueOf(marker.y_offset), value -> marker.y_offset = d(value, marker.y_offset), 13);
+        cycleButton("Text anchor", markerText.anchor, row++, List.of("auto", "absolute"), value -> {
+            markerText.anchor = value;
+            reopen(tab);
+        });
 
-        slider("Marker preview distance", marker.preview_distance, 1.0D, 64.0D, 14, value -> marker.preview_distance = value);
+        cycleButton("Text pick", markerText.pick, row++, List.of("nearest", "all"), value -> markerText.pick = value);
 
-        toggleButton("Marker animations", marker.animated, 15, value -> marker.animated = value);
+        toggleButton("Text shadow", markerText.shadow, row++, value -> markerText.shadow = value);
+        toggleButton("Text background", markerText.background, row++, value -> {
+            markerText.background = value;
+            reopen(tab);
+        });
 
-        int row = 16;
-
-        if (marker.animated) {
-            toggleButton("Bob / levitation", marker.bob, row++, value -> marker.bob = value);
-
-            if (marker.bob) {
-                slider("Bob height", marker.bob_amplitude, 0.0D, 1.5D, row++, value -> marker.bob_amplitude = value);
-                slider("Bob speed", marker.bob_speed, 0.05D, 4.0D, row++, value -> marker.bob_speed = value);
-            }
-
-            toggleButton("Pulse", marker.pulse, row++, value -> marker.pulse = value);
-
-            if (marker.pulse) {
-                slider("Pulse amount", marker.pulse_amount, 0.0D, 0.50D, row++, value -> marker.pulse_amount = value);
-                slider("Pulse speed", marker.pulse_speed, 0.05D, 4.0D, row++, value -> marker.pulse_speed = value);
-            }
-
-            toggleButton("Sway", marker.sway, row++, value -> marker.sway = value);
-
-            if (marker.sway) {
-                slider("Sway degrees", marker.sway_degrees, 0.0D, 30.0D, row++, value -> marker.sway_degrees = value);
-                slider("Sway speed", marker.sway_speed, 0.05D, 4.0D, row++, value -> marker.sway_speed = value);
-            }
+        if (markerText.background) {
+            slider("Text background alpha", markerText.background_alpha, 0.0D, 1.0D, row++, value -> markerText.background_alpha = value.floatValue());
         }
 
-        if ("absolute".equalsIgnoreCase(marker.anchor)) {
-            tripleFields("Marker X", nullable(marker.x), value -> marker.x = nd(value), "Y", nullable(marker.y), value -> marker.y = nd(value), "Z", nullable(marker.z), value -> marker.z = nd(value), row++);
+        toggleButton("Text animations", markerText.animated, row++, value -> {
+            markerText.animated = value;
+            reopen(tab);
+        });
+
+        if (markerText.animated) {
+            row = initWorldMarkerAnimationControls(markerText, row, "Text");
         }
 
-        help(row + 1, "Default texture: dlgstd:.../interactive_arrow.png. Browse imports a custom PNG and export includes it automatically.");
-        help(row + 2, "Animations are client-side only: bob, pulse and sway do not affect trigger hitboxes or multiplayer logic.");
+        if ("absolute".equalsIgnoreCase(markerText.anchor)) {
+            tripleFields("Text X", nullable(markerText.x), value -> markerText.x = nd(value), "Y", nullable(markerText.y), value -> markerText.y = nd(value), "Z", nullable(markerText.z), value -> markerText.z = nd(value), row++);
+        }
+
+        help(row++, "Marker text renders like a Minecraft name tag and is exported as part of the trigger JSON.");
+        help(row, "Image marker and marker text are independent: each can have its own height, range, animation and anchor.");
     }
+
+
+    private int initWorldMarkerAnimationControls(DialogueDefinition.WorldMarkerSettings marker, int row, String prefix) {
+        toggleButton(prefix + " bob / levitation", marker.bob, row++, value -> {
+            marker.bob = value;
+            reopen(tab);
+        });
+
+        if (marker.bob) {
+            slider(prefix + " bob height", marker.bob_amplitude, 0.0D, 1.5D, row++, value -> marker.bob_amplitude = value);
+            slider(prefix + " bob speed", marker.bob_speed, 0.05D, 4.0D, row++, value -> marker.bob_speed = value);
+        }
+
+        toggleButton(prefix + " pulse", marker.pulse, row++, value -> {
+            marker.pulse = value;
+            reopen(tab);
+        });
+
+        if (marker.pulse) {
+            slider(prefix + " pulse amount", marker.pulse_amount, 0.0D, 0.50D, row++, value -> marker.pulse_amount = value);
+            slider(prefix + " pulse speed", marker.pulse_speed, 0.05D, 4.0D, row++, value -> marker.pulse_speed = value);
+        }
+
+        toggleButton(prefix + " sway", marker.sway, row++, value -> {
+            marker.sway = value;
+            reopen(tab);
+        });
+
+        if (marker.sway) {
+            slider(prefix + " sway degrees", marker.sway_degrees, 0.0D, 30.0D, row++, value -> marker.sway_degrees = value);
+            slider(prefix + " sway speed", marker.sway_speed, 0.05D, 4.0D, row++, value -> marker.sway_speed = value);
+        }
+
+        return row;
+    }
+
 
     private void initZone() {
         DialogueDefinition.Trigger t = project.currentTrigger();
@@ -1137,7 +1225,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         } else if (triggerView) {
             int cardH = Math.min(170, Math.max(105, ph / 3));
             int previewH = Math.max(80, ph - cardH - 8);
-            renderTriggerCard(graphics, px, py, pw, cardH, mouseX, mouseY);
+            renderTriggerCard(graphics, px, py, pw, cardH, mouseX, mouseY, partialTick);
             previewTransform = DialogueEditorPreview.render(project, graphics, px, py + cardH + 8, pw, previewH, previewTicks, partialTick);
         } else if (lineTimeline) {
             int timelineH = Math.min(timelineHeight, Math.max(58, ph - 96));
@@ -1160,7 +1248,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         renderToast(graphics, partialTick);
     }
 
-    private void renderTriggerCard(GuiGraphics graphics, int x, int y, int w, int h, int mouseX, int mouseY) {
+    private void renderTriggerCard(GuiGraphics graphics, int x, int y, int w, int h, int mouseX, int mouseY, float partialTick) {
         DialogueDefinition.Trigger t = project.currentTrigger();
         DialogueRetroTheme.drawPanel(graphics, x, y, x + w, y + h);
         DialogueRetroTheme.drawTitleBar(graphics, x + 3, y + 3, x + w - 3, 20);
@@ -1179,8 +1267,17 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
 
         if (t.interactive_marker != null && t.interactive_marker.enabled) {
             cursorY += 2;
-            String markerText = "marker: " + (t.interactive_marker.anchor != null ? t.interactive_marker.anchor : "auto") + "  " + (t.interactive_marker.animated ? "animated" : "static");
-            cursorY += drawWrappedText(graphics, markerText, x + 9, cursorY, textWidth, 0xFF42F2E1, 2);
+            String markerInfo = "marker: " + (t.interactive_marker.anchor != null ? t.interactive_marker.anchor : "auto") + "  h=" + fmt(t.interactive_marker.y_offset) + "  " + (t.interactive_marker.animated ? "animated" : "static");
+
+            cursorY += drawWrappedText(graphics, markerInfo, x + 9, cursorY, textWidth, 0xFF42F2E1, 2);
+        }
+
+        if (t.marker_text != null && t.marker_text.enabled) {
+            cursorY += 2;
+
+            String textInfo = "text: " + (t.marker_text.text != null && !t.marker_text.text.isBlank() ? "\"" + t.marker_text.text + "\"" : "<empty>") + "  h=" + fmt(t.marker_text.y_offset);
+
+            cursorY += drawWrappedText(graphics, textInfo, x + 9, cursorY, textWidth, 0xFFFFD45A, 2);
         }
 
         if ("zone".equalsIgnoreCase(t.type)) {
@@ -1196,17 +1293,18 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
 
         if (hasModelPreview) {
             ResourceLocation id = ResourceLocation.tryParse(target);
+
             if (id != null) {
                 if (isEntityTarget(t)) {
-                    renderEntityCard(graphics, id, x + w / 2, y + 24, w / 2 - 12, h - 34, mouseX, mouseY);
+                    renderEntityCard(graphics, t, id, x + w / 2, y + 24, w / 2 - 12, h - 34, mouseX, mouseY, partialTick);
                 } else if (isBlockTarget(t)) {
-                    renderBlockCard(graphics, id, x + w / 2, y + 24, w / 2 - 12, h - 34);
+                    renderBlockCard(graphics, t, id, x + w / 2, y + 24, w / 2 - 12, h - 34, partialTick);
                 }
             }
         }
     }
 
-    private void renderEntityCard(GuiGraphics graphics, ResourceLocation id, int x, int y, int w, int h, int mouseX, int mouseY) {
+    private void renderEntityCard(GuiGraphics graphics, DialogueDefinition.Trigger trigger, ResourceLocation id, int x, int y, int w, int h, int mouseX, int mouseY, float partialTick) {
         if (minecraft.level == null) {
             return;
         }
@@ -1239,19 +1337,120 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         float lookY = (renderY - size * 1.6F) - mouseY;
 
         InventoryScreen.renderEntityInInventoryFollowsMouse(graphics, renderX, renderY, size, lookX, lookY, previewTargetEntity);
+
+        double entityHeight = Math.max(0.25D, previewTargetEntity.getBbHeight());
+        float pixelsPerBlock = (float) Math.max(10.0D, (size * 1.75D) / entityHeight);
+        float anchorY = renderY - size * 1.75F;
+
+        renderTriggerDecorationsPreview(graphics, trigger, renderX, anchorY, pixelsPerBlock, partialTick);
     }
 
-    private void renderBlockCard(GuiGraphics graphics, ResourceLocation id, int x, int y, int w, int h) {
+    private void renderBlockCard(GuiGraphics graphics, DialogueDefinition.Trigger trigger, ResourceLocation id, int x, int y, int w, int h, float partialTick) {
         Block block = ForgeRegistries.BLOCKS.getValue(id);
-        if (block == null || block.asItem() == Items.AIR) return;
+
+        if (block == null || block.asItem() == Items.AIR) {
+            return;
+        }
+
         ItemStack stack = new ItemStack(block);
         var pose = graphics.pose();
+
+        float centerX = x + w * 0.5F;
+        float centerY = y + h * 0.52F;
+
         pose.pushPose();
-        pose.translate(x + w * 0.5F, y + h * 0.52F, 100);
+        pose.translate(centerX, centerY, 100);
         pose.scale(3F, 3F, 3F);
         graphics.renderItem(stack, -8, -8);
         pose.popPose();
+
+        renderTriggerDecorationsPreview(graphics, trigger, centerX, centerY - 24.0F, 42.0F, partialTick);
     }
+
+    private void renderTriggerDecorationsPreview(GuiGraphics graphics, DialogueDefinition.Trigger trigger, float anchorX, float anchorY, float pixelsPerBlock, float partialTick) {
+        float seconds = (previewTicks + partialTick) / 20.0F;
+        boolean animate = project.animate_preview;
+
+        if (trigger.interactive_marker != null && trigger.interactive_marker.enabled) {
+            DialogueDefinition.InteractiveMarker marker = trigger.interactive_marker;
+            MarkerPreviewAnimation animation = markerPreviewAnimation(marker, seconds, animate, 0.0F);
+
+            ResourceLocation texture = DialogueEditorTextureCache.resolve(project, marker.texture, EDITOR_DEFAULT_INTERACTIVE_MARKER);
+
+            if (texture == null) {
+                texture = EDITOR_DEFAULT_INTERACTIVE_MARKER;
+            }
+
+            float centerY = anchorY - (float) (marker.y_offset * pixelsPerBlock) - (float) (animation.bob * pixelsPerBlock);
+
+            float size = (float) (22.0D * Math.max(0.10D, marker.size) * animation.scale);
+
+            var pose = graphics.pose();
+            pose.pushPose();
+            pose.translate(anchorX, centerY, 250.0F);
+            pose.mulPose(Axis.ZP.rotationDegrees(animation.sway));
+
+            int drawSize = Math.max(4, Math.round(size));
+
+            graphics.blit(texture, -drawSize / 2, -drawSize / 2, 0.0F, 0.0F, drawSize, drawSize, drawSize, drawSize);
+
+            pose.popPose();
+        }
+
+        if (trigger.marker_text != null && trigger.marker_text.enabled && trigger.marker_text.text != null && !trigger.marker_text.text.isBlank()) {
+
+            DialogueDefinition.MarkerText text = trigger.marker_text;
+            MarkerPreviewAnimation animation = markerPreviewAnimation(text, seconds, animate, 1.73F);
+
+            float centerY = anchorY - (float) (text.y_offset * pixelsPerBlock) - (float) (animation.bob * pixelsPerBlock);
+
+            float scale = (float) (Math.max(0.25D, text.scale) * animation.scale);
+            int color = 0xFF000000 | (DialogueEditorPreview.parseColor(text.color) & 0x00FFFFFF);
+
+            var pose = graphics.pose();
+            pose.pushPose();
+            pose.translate(anchorX, centerY, 260.0F);
+            pose.mulPose(Axis.ZP.rotationDegrees(animation.sway));
+            pose.scale(scale, scale, 1.0F);
+
+            int width = font.width(text.text);
+            int textX = -width / 2;
+
+            if (text.background) {
+                int alpha = Mth.clamp(Math.round(text.background_alpha * 255.0F), 0, 255);
+                graphics.fill(textX - 2, -2, textX + width + 2, font.lineHeight + 1, alpha << 24);
+            }
+
+            graphics.drawString(font, text.text, textX, 0, color, text.shadow);
+
+            pose.popPose();
+        }
+    }
+
+    private MarkerPreviewAnimation markerPreviewAnimation(DialogueDefinition.WorldMarkerSettings marker, float seconds, boolean animate, float phaseOffset) {
+        if (!animate || !marker.animated) {
+            return MarkerPreviewAnimation.IDENTITY;
+        }
+
+        double phase = phaseOffset;
+        double bob = marker.bob ? Math.sin(seconds * Math.PI * 2.0D * marker.bob_speed + phase) * Math.max(0.0D, marker.bob_amplitude) : 0.0D;
+
+        double scale = 1.0D;
+
+        if (marker.pulse) {
+            double pulse = Math.sin(seconds * Math.PI * 2.0D * marker.pulse_speed + phase * 0.73D);
+            scale = Math.max(0.05D, 1.0D + pulse * Math.max(0.0D, marker.pulse_amount));
+        }
+
+        float sway = marker.sway ? (float) (Math.sin(seconds * Math.PI * 2.0D * marker.sway_speed + phase * 1.37D) * Math.max(0.0D, marker.sway_degrees)) : 0.0F;
+
+        return new MarkerPreviewAnimation(bob, scale, sway);
+    }
+
+    private record MarkerPreviewAnimation(double bob, double scale, float sway) {
+        private static final MarkerPreviewAnimation IDENTITY = new MarkerPreviewAnimation(0.0D, 1.0D, 0.0F);
+    }
+
 
     private void renderGizmo(GuiGraphics graphics) {
         if (previewTransform == null) return;
@@ -2416,11 +2615,30 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
             return "Auto follows the trigger target. Absolute uses the Marker X/Y/Z fields and works with manual/external triggers too.";
         if (key.contains("marker pick"))
             return "Nearest shows one matching target; All shows markers above multiple matching targets within preview distance.";
+        if (key.contains("text anchor"))
+            return "Auto follows the trigger target. Absolute uses Text X/Y/Z and also works with manual/external triggers.";
+        if (key.contains("text pick"))
+            return "Nearest shows one matching target; All shows floating text above every matching target within preview distance.";
+        if (key.equals("marker text")) return "Enable floating Minecraft name-tag style text above this trigger.";
+        if (key.contains("marker height above target"))
+            return "Height in Minecraft blocks above the resolved entity/block/zone top. The World Preview updates live.";
+        if (key.contains("text height above target"))
+            return "Height in Minecraft blocks above the resolved entity/block/zone top for the floating name-tag text.";
         if (key.contains("marker preview distance"))
-            return "Maximum distance in blocks at which this player's client receives and renders the marker.";
-        if (key.contains("bob")) return "Smooth vertical levitation animation for the interaction marker.";
-        if (key.contains("pulse")) return "Smooth size breathing/pulse animation for the interaction marker.";
-        if (key.contains("sway")) return "Gentle left/right rotation around the marker center.";
+            return "Maximum distance in blocks at which this player's client receives and renders the image marker.";
+        if (key.contains("text preview distance"))
+            return "Maximum distance in blocks at which this player's client receives and renders the floating text.";
+        if (key.contains("marker text value"))
+            return "Floating name-tag style text rendered above the trigger. It can be used with or without the image marker.";
+        if (key.contains("marker text color")) return "Name-tag text color. Accepts named Minecraft colors or HEX.";
+        if (key.contains("marker text scale")) return "Visual scale of the floating name-tag text.";
+        if (key.contains("text background alpha")) return "Opacity of the dark name-tag background from 0 to 1.";
+        if (key.contains("text background"))
+            return "Draw the vanilla-style dark name-tag background behind the marker text.";
+        if (key.contains("text shadow")) return "Draw a Minecraft font shadow behind the marker text.";
+        if (key.contains("bob")) return "Smooth vertical levitation animation for the image marker or marker text.";
+        if (key.contains("pulse")) return "Smooth size breathing/pulse animation for the image marker or marker text.";
+        if (key.contains("sway")) return "Gentle left/right rotation around the image marker or marker text center.";
         if (key.contains("dimension"))
             return "Optional dimension id, e.g. minecraft:overworld. Blank means any dimension.";
         if (key.contains("anchor type"))

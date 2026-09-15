@@ -7,7 +7,7 @@ import java.util.Map;
 
 public class DialogueDefinition {
 
-    public int format = 4;
+    public int format = 5;
 
     public String voice;
     public String voice_source = "master";
@@ -311,14 +311,11 @@ public class DialogueDefinition {
         public double size_z = 6.0D;
         public ZoneVisual visual = new ZoneVisual();
         public InteractiveMarker interactive_marker = new InteractiveMarker();
+        public MarkerText marker_text = new MarkerText();
     }
 
 
-    public static class InteractiveMarker {
-        public boolean enabled = false;
-
-        public String texture = "dlgstd:textures/gui/dialogue/interactive_arrow.png";
-
+    public static class WorldMarkerSettings {
         /*
          * auto:
          * - entity triggers -> matching entities
@@ -328,12 +325,16 @@ public class DialogueDefinition {
          *
          * absolute:
          * - use x/y/z below, which also makes manual/external triggers
-         *   capable of showing a marker.
+         *   capable of showing a marker/text.
          */
         public String anchor = "auto";
         public String pick = "nearest";
 
-        public double size = 0.85D;
+        /*
+         * Height above the already resolved trigger top.
+         * For an entity that means above its bounding-box height;
+         * for a block it means above the block top.
+         */
         public double y_offset = 0.35D;
         public double preview_distance = 20.0D;
 
@@ -354,6 +355,33 @@ public class DialogueDefinition {
         public boolean sway = false;
         public double sway_degrees = 6.0D;
         public double sway_speed = 0.90D;
+    }
+
+
+    public static class InteractiveMarker extends WorldMarkerSettings {
+        public boolean enabled = false;
+        public String texture = "dlgstd:textures/gui/dialogue/interactive_arrow.png";
+        public double size = 0.85D;
+    }
+
+
+    public static class MarkerText extends WorldMarkerSettings {
+        public boolean enabled = false;
+
+        public String text = "Talk";
+        public String color = "white";
+        public double scale = 1.0D;
+
+        public boolean shadow = true;
+        public boolean background = true;
+        public float background_alpha = 0.25F;
+
+        public MarkerText() {
+            this.y_offset = 1.20D;
+            this.bob_amplitude = 0.10D;
+            this.pulse_amount = 0.04D;
+            this.sway = false;
+        }
     }
 
 
