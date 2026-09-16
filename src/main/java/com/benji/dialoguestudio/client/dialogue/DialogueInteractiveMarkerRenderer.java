@@ -10,7 +10,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -113,6 +112,9 @@ public final class DialogueInteractiveMarkerRenderer {
         if (texture == null) {
             texture = ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/interactive_arrow.png");
         }
+
+        texture = DialogueImageTextures.WORLD.resolve(texture,
+                ResourceLocation.fromNamespaceAndPath(DialogueStudio.MODID, "textures/gui/dialogue/interactive_arrow.png"));
 
         double scale = Math.max(0.10D, marker.size()) * animation.scale;
 

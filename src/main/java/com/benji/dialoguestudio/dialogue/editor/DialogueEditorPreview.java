@@ -92,7 +92,7 @@ public final class DialogueEditorPreview {
         pose.translate(originX, originY, 0.0F);
         pose.scale(scale, scale, 1.0F);
 
-        renderBackground(project, graphics, definition);
+        renderBackground(project, graphics, definition, line);
         renderSprite(project, graphics, definition, line, ticks + partialTick);
         renderFrame(project, graphics, definition, line);
         renderText(project, graphics, definition, line, ticks + partialTick, nodePreview, scale);
@@ -111,8 +111,9 @@ public final class DialogueEditorPreview {
         return transform;
     }
 
-    private static void renderBackground(DialogueEditorProject project, GuiGraphics graphics, DialogueDefinition definition) {
-        ResourceLocation texture = DialogueEditorTextureCache.resolve(project, definition.background, DEFAULT_BACKGROUND);
+    private static void renderBackground(DialogueEditorProject project, GuiGraphics graphics, DialogueDefinition definition, DialogueDefinition.Line line) {
+        String declared = line.background != null ? line.background : definition.background;
+        ResourceLocation texture = DialogueEditorTextureCache.resolve(project, declared, DEFAULT_BACKGROUND);
         if (texture == null) return;
         DialogueDefinition.Layout layout = definition.layout;
         graphics.setColor(1F, 1F, 1F, Mth.clamp(definition.background_alpha, 0F, 1F));

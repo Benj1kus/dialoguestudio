@@ -77,8 +77,8 @@ public final class DialogueEditorClientHooks {
                     continue;
                 }
 
-                if (minecraft.screen instanceof DialogueEditorScreen) {
-                    minecraft.setScreen(null);
+                if (minecraft.screen instanceof DialogueEditorScreen editor) {
+                    editor.onClose();
                 } else {
                     minecraft.setScreen(new DialogueEditorScreen(DialogueEditorWorkspace.loadLastOrDefault(), DialogueEditorScreen.Tab.PROJECT));
                 }

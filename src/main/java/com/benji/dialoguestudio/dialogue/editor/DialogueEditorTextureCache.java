@@ -1,19 +1,12 @@
 package com.benji.dialoguestudio.dialogue.editor;
 
-import com.mojang.blaze3d.platform.NativeImage;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.DynamicTexture;
+import com.benji.dialoguestudio.client.dialogue.DialogueImageTextures;
 import net.minecraft.resources.ResourceLocation;
 
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
 
 public final class DialogueEditorTextureCache {
-
-    private static final Map<Path, ResourceLocation> CACHE = new HashMap<>();
 
     private DialogueEditorTextureCache() {
     }
@@ -23,31 +16,21 @@ public final class DialogueEditorTextureCache {
 
         Path imported = DialogueEditorWorkspace.importedAsset(project, declared);
         if (imported != null && Files.isRegularFile(imported)) {
-            return CACHE.computeIfAbsent(imported.toAbsolutePath().normalize(), DialogueEditorTextureCache::loadDynamic);
+            return DialogueImageTextures.EDITOR.resolve(imported, fallback, project.animate_preview);
         }
 
-        ResourceLocation parsed = ResourceLocation.tryParse(declared);
-        return parsed != null ? parsed : fallback;
+        return DialogueImageTextures.EDITOR.resolve(ResourceLocation.tryParse(declared), fallback, project.animate_preview);
     }
 
     public static void invalidate(DialogueEditorProject project, String relativeAssetPath) {
-        Path path = DialogueEditorWorkspace.assetRoot(project).resolve(relativeAssetPath).toAbsolutePath().normalize();
-        ResourceLocation old = CACHE.remove(path);
-        if (old != null) Minecraft.getInstance().getTextureManager().release(old);
+        DialogueImageTextures.EDITOR.invalidate(DialogueEditorWorkspace.assetRoot(project).resolve(relativeAssetPath));
     }
 
     public static void clear() {
-        for (ResourceLocation id : CACHE.values()) Minecraft.getInstance().getTextureManager().release(id);
-        CACHE.clear();
+        DialogueImageTextures.EDITOR.clear();
     }
 
-    private static ResourceLocation loadDynamic(Path path) {
-        try (InputStream stream = Files.newInputStream(path)) {
-            NativeImage image = NativeImage.read(stream);
-            DynamicTexture texture = new DynamicTexture(image);
-            return Minecraft.getInstance().getTextureManager().register("dialogue_studio_editor", texture);
-        } catch (Exception exception) {
-            return null;
-        }
+    public static void restart() {
+        DialogueImageTextures.EDITOR.restart();
     }
 }

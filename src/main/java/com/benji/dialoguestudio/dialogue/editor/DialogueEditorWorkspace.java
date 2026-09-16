@@ -1,5 +1,6 @@
 package com.benji.dialoguestudio.dialogue.editor;
 
+import com.benji.dialoguestudio.client.dialogue.DialogueGifDecoder;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -29,7 +30,6 @@ public final class DialogueEditorWorkspace {
         Path current = gameDirectory.resolve("dialogue_studio");
         Path legacy = gameDirectory.resolve("oasiso_dialogue_editor");
 
-        // Preserve existing Dialogue Studio projects created while the editor lived inside Oasiso.
         if (!Files.exists(current) && Files.exists(legacy)) {
             return legacy;
         }
@@ -106,7 +106,12 @@ public final class DialogueEditorWorkspace {
     }
 
     public static String importTexture(DialogueEditorProject project, Path source) throws IOException {
-        requireExtension(source, ".png");
+        requireExtension(source, ".png", ".gif");
+        if (source.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".gif")) {
+            try (var stream = Files.newInputStream(source)) {
+                DialogueGifDecoder.read(stream);
+            }
+        }
         String name = sanitizeFileName(source.getFileName().toString());
         Path target = assetRoot(project).resolve("textures/gui/dialogue").resolve(name);
         Files.createDirectories(target.getParent());
@@ -172,10 +177,14 @@ public final class DialogueEditorWorkspace {
         return assetRoot(project).resolve(path);
     }
 
-    private static void requireExtension(Path source, String extension) throws IOException {
-        if (source == null || !Files.isRegularFile(source) || !source.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(extension)) {
-            throw new IOException("Expected " + extension + " file");
+    private static void requireExtension(Path source, String... extensions) throws IOException {
+        if (source != null && Files.isRegularFile(source)) {
+            String name = source.getFileName().toString().toLowerCase(Locale.ROOT);
+            for (String extension : extensions) {
+                if (name.endsWith(extension)) return;
+            }
         }
+        throw new IOException("Expected " + String.join(" or ", extensions) + " file");
     }
 
     private static String sanitizeFileName(String value) {

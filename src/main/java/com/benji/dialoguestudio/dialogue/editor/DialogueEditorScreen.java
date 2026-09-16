@@ -211,6 +211,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         }));
         button(project.animate_preview ? "Preview animation: ON" : "Preview animation: OFF", 8, b -> {
             project.animate_preview = !project.animate_preview;
+            if (project.animate_preview) DialogueEditorTextureCache.restart();
             reopen(Tab.PROJECT);
         });
         button("Import existing dialogue JSON", 9, b -> pickFile(".json", path -> {
@@ -292,14 +293,14 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
 
 
     private void initVisuals() {
-        assetField("Frame texture", project.definition.frame, 0, ".png", false, s -> project.definition.frame = blankToNull(s));
-        assetField("Background texture", project.definition.background, 1, ".png", false, s -> project.definition.background = blankToNull(s));
+        assetField("Frame texture", project.definition.frame, 0, ".png,.gif", false, s -> project.definition.frame = blankToNull(s));
+        assetField("Background texture", project.definition.background, 1, ".png,.gif", false, s -> project.definition.background = blankToNull(s));
         smallFields("BG alpha", String.valueOf(project.definition.background_alpha), s -> project.definition.background_alpha = f(s, project.definition.background_alpha), "BG bob", String.valueOf(project.definition.background_bob), s -> project.definition.background_bob = f(s, project.definition.background_bob), 2);
         field("Background speed", String.valueOf(project.definition.background_speed), 3, s -> project.definition.background_speed = f(s, project.definition.background_speed), 32);
         cycleButton("Default sprite position", project.definition.sprite_position, 4, List.of("left", "center", "right"), s -> project.definition.sprite_position = s);
         cycleButton("Default sprite transition", project.definition.sprite_transition, 5, List.of("none", "bounce", "sway", "fade_up"), s -> project.definition.sprite_transition = s);
         smallFields("Move ticks", String.valueOf(project.definition.sprite_move_ticks), s -> project.definition.sprite_move_ticks = i(s, project.definition.sprite_move_ticks), "Transition ticks", String.valueOf(project.definition.sprite_transition_ticks), s -> project.definition.sprite_transition_ticks = i(s, project.definition.sprite_transition_ticks), 6);
-        help(8, "PNG picker copies files into the editor workspace.");
+        help(8, "PNG/GIF picker copies files into the editor workspace. GIF keeps its frame timing.");
         help(9, "Export writes them to assets/<namespace>/textures/gui/dialogue/.");
     }
 
@@ -342,7 +343,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
             field("Translation key", project.ensureLangKey(line, project.selected_line), 3, s -> line.text = s, 256);
         else help(3, "Switch to LANG to generate/edit language files visually.");
 
-        assetField("Sprite PNG", line.sprite, 4, ".png", false, s -> line.sprite = blankToNull(s));
+        assetField("Sprite PNG/GIF", line.sprite, 4, ".png,.gif", false, s -> line.sprite = blankToNull(s));
         colorField("Text color override (blank = inherit)", nullToEmpty(line.text_color), 5, s -> line.text_color = blankToNull(s));
         field("Gradient override: blank=inherit, none=disable", gradientOverride(line.text_gradient), 6, s -> line.text_gradient = parseGradient(s, true), 256);
         cycleNullableButton("Text effect override", line.text_effect, 7, List.of("normal", "wave", "shake", "explode", "linear"), s -> line.text_effect = s);
@@ -380,8 +381,8 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         }, this::addLine, this::removeLine);
 
         smallFields("Char ticks", nullable(line.char_ticks), s -> line.char_ticks = ni(s), "Hold ticks", nullable(line.hold_ticks), s -> line.hold_ticks = ni(s), 1);
-        assetField("Frame override", line.frame, 2, ".png", false, s -> line.frame = blankToNull(s));
-        assetField("Background override", line.background, 3, ".png", false, s -> line.background = blankToNull(s));
+        assetField("Frame override", line.frame, 2, ".png,.gif", false, s -> line.frame = blankToNull(s));
+        assetField("Background override", line.background, 3, ".png,.gif", false, s -> line.background = blankToNull(s));
         cycleNullableButton("Sprite position override", line.sprite_position, 4, List.of("left", "center", "right"), s -> line.sprite_position = s);
         field("Exact sprite X (blank = position preset)", nullable(line.sprite_x), 5, s -> line.sprite_x = nf(s), 32);
         cycleNullableButton("Sprite transition override", line.sprite_transition, 6, List.of("none", "bounce", "sway", "fade_up"), s -> line.sprite_transition = s);
@@ -509,16 +510,13 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
 
         int row = 9;
 
-        /*
-         * IMAGE MARKER
-         */
         toggleButton("Interactive marker", marker.enabled, row++, value -> {
             marker.enabled = value;
             reopen(tab);
         });
 
         if (marker.enabled) {
-            assetField("Interactive marker PNG", marker.texture, row++, ".png", false, value -> marker.texture = value == null || value.isBlank() ? "dlgstd:textures/gui/dialogue/interactive_arrow.png" : value);
+            assetField("Interactive marker PNG/GIF", marker.texture, row++, ".png,.gif", false, value -> marker.texture = value == null || value.isBlank() ? "dlgstd:textures/gui/dialogue/interactive_arrow.png" : value);
 
             cycleButton("Marker anchor", marker.anchor, row++, List.of("auto", "absolute"), value -> {
                 marker.anchor = value;
@@ -725,7 +723,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
             markZoneCustom(v);
         });
 
-        assetField("Marker texture PNG", v.texture, 4, ".png", false, value -> {
+        assetField("Marker texture PNG/GIF", v.texture, 4, ".png,.gif", false, value -> {
             v.texture = blankToNull(value);
             markZoneCustom(v);
         });
@@ -1142,7 +1140,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         if (trigger.visual == null) trigger.visual = new DialogueDefinition.ZoneVisual();
 
         if (trigger.visual.texture == null || trigger.visual.texture.isBlank()) {
-            STATUS = "Import/select a Marker texture PNG before opening the texture gizmo.";
+            STATUS = "Import/select a Marker texture PNG/GIF before opening the texture gizmo.";
             return;
         }
 
@@ -1640,28 +1638,28 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         String file = path.getFileName().toString().toLowerCase(Locale.ROOT);
 
         try {
-            if (file.endsWith(".png")) {
+            if (file.endsWith(".png") || file.endsWith(".gif")) {
                 String id = DialogueEditorWorkspace.importTexture(project, path);
 
                 if (tab == Tab.LINES || tab == Tab.LINE_OVERRIDES) {
                     project.currentLine().sprite = id;
-                    STATUS = "Dropped PNG -> current line sprite";
+                    STATUS = "Dropped image -> current line sprite";
                 } else if (tab == Tab.ZONE_FX && "zone".equalsIgnoreCase(project.currentTrigger().type)) {
                     if (project.currentTrigger().visual == null)
                         project.currentTrigger().visual = new DialogueDefinition.ZoneVisual();
                     project.currentTrigger().visual.texture = id;
-                    STATUS = "Dropped PNG -> zone marker";
+                    STATUS = "Dropped image -> zone marker";
                 } else if (tab == Tab.VISUALS) {
                     if (project.definition.frame == null || project.definition.frame.isBlank()) {
                         project.definition.frame = id;
-                        STATUS = "Dropped PNG -> frame";
+                        STATUS = "Dropped image -> frame";
                     } else {
                         project.definition.background = id;
-                        STATUS = "Dropped PNG -> background";
+                        STATUS = "Dropped image -> background";
                     }
                 } else {
                     project.currentLine().sprite = id;
-                    STATUS = "Dropped PNG -> current line sprite";
+                    STATUS = "Dropped image -> current line sprite";
                 }
             } else if (file.endsWith(".ogg")) {
                 String id = DialogueEditorWorkspace.importSound(project, path);
@@ -1677,7 +1675,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
                     STATUS = "Dropped dialogue JSON imported.";
                 }
             } else {
-                STATUS = "Drop PNG, OGG or JSON files into Dialogue Studio.";
+                STATUS = "Drop PNG, GIF, OGG or JSON files into Dialogue Studio.";
                 return;
             }
 
@@ -2588,11 +2586,11 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         if (key.contains("outline"))
             return "Text outline. Color accepts named/HEX/rainbow; gradient uses comma-separated colors; thickness 0 disables it.";
         if (key.contains("frame texture") || key.contains("frame override"))
-            return "PNG used as the dialogue frame. Browse or drag a PNG into Studio.";
+            return "PNG or animated GIF used as the dialogue frame. Browse or drag an image into Studio.";
         if (key.contains("background texture") || key.contains("background override"))
-            return "Fullscreen dialogue background PNG. Blank uses Dialogue Studio dithering_gradient.png.";
+            return "Fullscreen dialogue background PNG or animated GIF. Blank uses Dialogue Studio dithering_gradient.png.";
         if (key.contains("sprite png"))
-            return "Character portrait PNG for this line. New projects use Dialogue Studio's transparent placeholder sprite.";
+            return "Character portrait PNG or animated GIF for this line. GIF keeps its timing and loop count. New projects use Dialogue Studio's transparent placeholder sprite.";
         if (key.contains("sprite position"))
             return "Preset horizontal sprite position. Exact sprite X can override this per line.";
         if (key.contains("sprite transition")) return "Visual transition when the portrait changes between lines.";
@@ -2608,7 +2606,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         if (key.contains("radius")) return "Trigger/zone radius in Minecraft blocks.";
         if (key.contains("cooldown")) return "Ticks before this trigger instance can activate again.";
         if (key.contains("interactive marker png"))
-            return "World-space interaction marker texture. Blank/reset uses Dialogue Studio interactive_arrow.png; Browse imports your own PNG.";
+            return "World-space interaction marker texture. Blank/reset uses Dialogue Studio interactive_arrow.png; Browse imports your own PNG or animated GIF.";
         if (key.contains("interactive marker"))
             return "Shows a world-space icon above the trigger so players can recognize that it has dialogue.";
         if (key.contains("marker anchor"))
@@ -2651,7 +2649,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
             return "Controls only zone visualization. The gameplay trigger still works when this is OFF.";
         if (key.startsWith("style")) return "Zone preview style: auto, ring, outline, sprite or pillar.";
         if (key.contains("custom floor"))
-            return "Optional transparent PNG rendered flat on the ground for the zone preview.";
+            return "Optional transparent PNG or animated GIF rendered flat on the ground for the zone preview.";
         if (key.contains("alpha")) return "Transparency from 0.0 to 1.0.";
         if (key.contains("visual size")) return "Rendered marker size in Minecraft blocks. 0 = automatic.";
         if (key.contains("preview distance")) return "Maximum distance at which the client sees this zone marker.";

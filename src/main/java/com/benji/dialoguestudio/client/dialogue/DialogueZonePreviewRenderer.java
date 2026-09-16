@@ -171,7 +171,7 @@ public final class DialogueZonePreviewRenderer {
     }
 
     private static void renderTexture(PoseStack poseStack, MultiBufferSource.BufferSource buffers, DialogueZonePreviewS2CPacket.Zone zone, AnimationState animation, float timeTicks) {
-        ResourceLocation texture = ResourceLocation.tryParse(zone.texture());
+        ResourceLocation texture = DialogueImageTextures.WORLD.resolve(ResourceLocation.tryParse(zone.texture()), null);
         if (texture == null) {
             return;
         }

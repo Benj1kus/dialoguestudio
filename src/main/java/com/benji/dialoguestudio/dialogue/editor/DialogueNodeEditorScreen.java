@@ -27,6 +27,7 @@ public final class DialogueNodeEditorScreen extends DialogueRetroScreen {
     private final Screen parent;
     private final DialogueEditorProject project;
     private String nodeId;
+    private String assetError = "";
 
     private int selectedChoice;
     private int scrollOffset;
@@ -553,7 +554,7 @@ public final class DialogueNodeEditorScreen extends DialogueRetroScreen {
     }
 
     private int addAssetField(int y, String label, String value, Consumer<String> setter) {
-        return addAssetField(y, label, value, ".png", false, setter);
+        return addAssetField(y, label, value, ".png,.gif", false, setter);
     }
 
     private int addAssetField(int y, String label, String value, String extension, boolean sound, Consumer<String> setter) {
@@ -575,13 +576,15 @@ public final class DialogueNodeEditorScreen extends DialogueRetroScreen {
     }
 
     private void importAsset(Path path, boolean sound, Consumer<String> setter) {
+        assetError = "";
         try {
             String id = sound ? DialogueEditorWorkspace.importSound(project, path) : DialogueEditorWorkspace.importTexture(project, path);
 
             setter.accept(id);
             DialogueEditorWorkspace.save(project);
 
-        } catch (Exception ignored) {
+        } catch (Exception exception) {
+            assetError = "Import failed: " + exception.getMessage();
         }
 
         rebuild();
@@ -651,7 +654,8 @@ public final class DialogueNodeEditorScreen extends DialogueRetroScreen {
         if (node != null) {
             String type = nodeType(node);
 
-            graphics.drawString(font, shortHelp(type), left + 16, 104 + 8, typeColor(type), false);
+            graphics.drawString(font, trim(assetError.isEmpty() ? shortHelp(type) : assetError, innerW),
+                    left + 16, 104 + 8, assetError.isEmpty() ? typeColor(type) : 0xFFFF8888, false);
         }
 
         graphics.enableScissor(left, contentTop, left + panelW, contentBottom);

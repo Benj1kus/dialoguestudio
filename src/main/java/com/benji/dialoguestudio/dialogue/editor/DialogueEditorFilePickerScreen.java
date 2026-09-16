@@ -179,7 +179,11 @@ public final class DialogueEditorFilePickerScreen extends DialogueRetroScreen {
                     return true;
                 }
 
-                return path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(extension);
+                String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
+                for (String allowed : extension.split(",")) {
+                    if (name.endsWith(allowed.trim())) return true;
+                }
+                return false;
             }).filter(path -> search.isBlank() || path.getFileName().toString().toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT))).sorted(Comparator.comparing((Path path) -> !Files.isDirectory(path)).thenComparing(path -> path.getFileName().toString().toLowerCase(Locale.ROOT))).forEach(result::add);
 
         } catch (Exception ignored) {
@@ -224,7 +228,7 @@ public final class DialogueEditorFilePickerScreen extends DialogueRetroScreen {
 
         graphics.drawString(font, (selectDirectory ? "Folder: " : "Folder: ") + current, 10, 59, DialogueRetroTheme.TEXT_PATH, false);
 
-        String hint = selectDirectory ? "Open the destination folder, then click Select folder. Mouse wheel changes pages." : "Mouse wheel changes pages. Showing folders and " + (extension.isBlank() ? "files" : extension + " files") + ". You can also drag files directly into Dialogue Studio.";
+        String hint = selectDirectory ? "Open the destination folder, then click Select folder. Mouse wheel changes pages." : "Mouse wheel changes pages. Showing folders and " + (extension.isBlank() ? "files" : extension.replace(",", " / ") + " files") + ". You can also drag files directly into Dialogue Studio.";
 
         graphics.drawString(font, hint, 10, height - 40, DialogueRetroTheme.TEXT_HINT, false);
 

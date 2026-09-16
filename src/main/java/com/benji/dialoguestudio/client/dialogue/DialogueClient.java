@@ -107,6 +107,7 @@ public final class DialogueClient {
                 return;
             }
 
+            DialogueImageTextures.DIALOGUE.clear();
             definition = loaded;
             sessionId = newSessionId;
             dialogueId = newDialogueId;
@@ -189,6 +190,7 @@ public final class DialogueClient {
         waitingForNodeState = false;
 
         DialogueDefinition.Line newLine = currentLineOrNull();
+        restartChangedImages(oldLine, newLine);
 
         previousSprite = oldSprite;
 
@@ -376,6 +378,7 @@ public final class DialogueClient {
         lineIndex++;
 
         DialogueDefinition.Line next = currentLine();
+        restartChangedImages(old, next);
 
         previousSprite = oldSprite;
 
@@ -457,6 +460,7 @@ public final class DialogueClient {
 
     private static void reset() {
         closeChoiceInputScreen();
+        DialogueImageTextures.DIALOGUE.clear();
 
         definition = null;
         sessionId = null;
@@ -716,7 +720,7 @@ public final class DialogueClient {
             return;
         }
 
-        ResourceLocation sprite = ResourceLocation.tryParse(line.sprite);
+        ResourceLocation sprite = DialogueImageTextures.DIALOGUE.resolve(ResourceLocation.tryParse(line.sprite), null);
 
         if (sprite == null) {
             return;
@@ -734,7 +738,7 @@ public final class DialogueClient {
 
         if (("fade".equals(transition) || "fade_up".equals(transition)) && previousSprite != null && progress < 1.0F) {
 
-            ResourceLocation old = ResourceLocation.tryParse(previousSprite);
+            ResourceLocation old = DialogueImageTextures.DIALOGUE.resolve(ResourceLocation.tryParse(previousSprite), null);
 
             if (old != null) {
                 int visibleHeight = Math.max(0, Math.round(height * (1.0F - progress)));
@@ -1465,6 +1469,18 @@ public final class DialogueClient {
     }
 
 
+    private static void restartChangedImages(DialogueDefinition.Line oldLine, DialogueDefinition.Line newLine) {
+        String oldSprite = oldLine != null ? oldLine.sprite : null;
+        String newSprite = newLine != null ? newLine.sprite : null;
+        String oldFrame = oldLine != null && oldLine.frame != null ? oldLine.frame : definition.frame;
+        String newFrame = newLine != null && newLine.frame != null ? newLine.frame : definition.frame;
+        String oldBackground = oldLine != null && oldLine.background != null ? oldLine.background : definition.background;
+        String newBackground = newLine != null && newLine.background != null ? newLine.background : definition.background;
+        if (!Objects.equals(oldSprite, newSprite)) DialogueImageTextures.DIALOGUE.restart(newSprite);
+        if (!Objects.equals(oldFrame, newFrame)) DialogueImageTextures.DIALOGUE.restart(newFrame);
+        if (!Objects.equals(oldBackground, newBackground)) DialogueImageTextures.DIALOGUE.restart(newBackground);
+    }
+
     private static ResourceLocation currentFrame() {
         DialogueDefinition.Line line = currentLineOrNull();
 
@@ -1472,7 +1488,7 @@ public final class DialogueClient {
 
         ResourceLocation parsed = value != null ? ResourceLocation.tryParse(value) : null;
 
-        return parsed != null ? parsed : DEFAULT_FRAME;
+        return DialogueImageTextures.DIALOGUE.resolve(parsed, DEFAULT_FRAME);
     }
 
 
@@ -1483,7 +1499,7 @@ public final class DialogueClient {
 
         ResourceLocation parsed = value != null ? ResourceLocation.tryParse(value) : null;
 
-        return parsed != null ? parsed : DEFAULT_BACKGROUND;
+        return DialogueImageTextures.DIALOGUE.resolve(parsed, DEFAULT_BACKGROUND);
     }
 
 
