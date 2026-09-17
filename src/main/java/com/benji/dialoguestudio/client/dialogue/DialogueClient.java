@@ -26,6 +26,7 @@ import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import com.benji.dialoguestudio.dialogue.text.DialogueTextTags;
 
 import java.awt.Color;
 import java.util.*;
@@ -77,6 +78,8 @@ public final class DialogueClient {
 
     private static String currentText = "";
     private static DialogueMarkdown.Result currentMarkdown = DialogueMarkdown.parse("", false);
+    private static DialogueTextTags.Result currentTags = DialogueTextTags.expand(currentMarkdown, "");
+
     private static int[] revealTicks = new int[0];
 
     private static String previousSprite;
@@ -405,7 +408,8 @@ public final class DialogueClient {
         DialogueDefinition.Line line = currentLineOrNull();
 
         String source = resolveText(line);
-        currentMarkdown = DialogueMarkdown.parse(source, markdownEnabled(line));
+        currentTags = DialogueTextTags.expand(DialogueMarkdown.parse(source, markdownEnabled(line)));
+        currentMarkdown = currentTags.markdown();
         currentText = currentMarkdown.text();
         revealTicks = new int[currentText.length()];
 
@@ -436,11 +440,11 @@ public final class DialogueClient {
         }
 
         if (choice.literal != null) {
-            return choice.literal;
+            return DialogueTextTags.expandPlain(choice.literal);
         }
 
         if (choice.text != null) {
-            return I18n.get(choice.text);
+            return DialogueTextTags.expandPlain(I18n.get(choice.text));
         }
 
         return "<choice>";
@@ -845,7 +849,7 @@ public final class DialogueClient {
                 continue;
             }
 
-            DialogueRichTextUtil.ResolvedStyle rich = DialogueRichTextUtil.resolve(line, currentText, glyph.index, locale);
+            DialogueRichTextUtil.ResolvedStyle rich = currentTags.resolve(line, glyph.index, locale);
 
             List<String> effects = rich.effects != null ? normalizedEffects(rich.effects) : baseEffects;
 
@@ -1678,7 +1682,7 @@ public final class DialogueClient {
 
 
     private static int styledGlyphWidth(Font font, DialogueDefinition.Line line, String text, String locale, int index, char character) {
-        DialogueRichTextUtil.ResolvedStyle rich = DialogueRichTextUtil.resolve(line, text, index, locale);
+        DialogueRichTextUtil.ResolvedStyle rich = currentTags.resolve(line, index, locale);
 
         return DialogueTextRenderUtil.width(font, character, effectiveGlyphStyle(line, index, rich));
     }

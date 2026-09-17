@@ -177,11 +177,34 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
 
         int resetW = Math.min(78, Math.max(60, LEFT / 4));
         int allW = Math.min(72, Math.max(58, LEFT / 4));
+        int tagsW = buttonH + 6;
 
-        addRenderableWidget(DialogueRetroButton.retroBuilder(Component.literal("Reset tab"), b -> confirmResetCurrentTab()).bounds(LEFT - resetW - allW - 18, y, resetW, buttonH).build());
+        addRenderableWidget(DialogueRetroButton.retroBuilder(
+                Component.literal("Reset tab"), b -> confirmResetCurrentTab()
+        ).bounds(LEFT - resetW - allW - 18 - tagsW, y, resetW, buttonH).build());
 
-        addRenderableWidget(DialogueRetroButton.retroBuilder(Component.literal("Reset all"), b -> confirmResetAll()).bounds(LEFT - allW - 12, y, allW, buttonH).build());
+        addRenderableWidget(DialogueRetroButton.retroBuilder(
+                Component.literal("Reset all"), b -> confirmResetAll()
+        ).bounds(LEFT - allW - 12 - tagsW, y, allW, buttonH).build());
+
+        String tagsHelp = "Text tags (LITERAL and LANG): "
+                + "§a[player]§r = display player username (who read dialog)\n "
+                + "\n"
+                + "§a[br]§r = new line\n "
+                + "\n"
+                + "Select the WHOLE tag in Rich Text to style it (font, color, effects). ";
+
+        Button tagsButton = DialogueRetroButton.retroBuilder(
+                Component.literal("?"), b -> STATUS = tagsHelp
+        ).bounds(LEFT - 12 - buttonH, y, buttonH, buttonH).build();
+
+        tagsButton.setTooltip(
+                net.minecraft.client.gui.components.Tooltip.create(Component.literal(tagsHelp))
+        );
+
+        addRenderableWidget(tagsButton);
     }
+
 
     private void initProject() {
         field("Project name", project.project_name, 0, s -> project.project_name = s, 96);
@@ -1185,7 +1208,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         DialogueRetroTheme.drawPanel(graphics, LEFT + 4, bodyTop, width - 4, height - 4);
         DialogueRetroTheme.drawDarkInset(graphics, LEFT + 8, bodyTop + 4, width - 8, height - 8);
 
-        graphics.drawString(font, "DIALOGUE STUDIO", 12, bodyTop + 8, DialogueRetroTheme.LIME, false);
+        graphics.drawString(font, LEFT < 300 ? "STUDIO" : "DIALOGUE STUDIO", 12, bodyTop + 8, DialogueRetroTheme.LIME, false);
 
         graphics.fill(8, height - 20, LEFT - 4, height - 7, DialogueRetroTheme.BEIGE);
         graphics.fill(8, height - 20, LEFT - 4, height - 19, DialogueRetroTheme.CREAM_LIGHT);

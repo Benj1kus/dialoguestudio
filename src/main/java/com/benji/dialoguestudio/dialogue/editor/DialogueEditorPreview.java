@@ -12,6 +12,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import com.benji.dialoguestudio.dialogue.text.DialogueTextTags;
 
 import java.awt.*;
 import java.util.ArrayList;
@@ -219,12 +220,13 @@ public final class DialogueEditorPreview {
             text = line.text != null ? "<" + line.text + ">" : "<empty line>";
         }
 
-        DialogueMarkdown.Result markdown = DialogueMarkdown.parse(text, markdownEnabled(definition, line));
+        DialogueTextTags.Result tags = DialogueTextTags.expand(DialogueMarkdown.parse(text, markdownEnabled(definition, line)));
+        DialogueMarkdown.Result markdown = tags.markdown();
         text = markdown.text();
 
         int maxWidth = Math.max(1, Mth.floor(layout.text_width / layout.text_scale));
 
-        List<Glyph> glyphs = layoutGlyphs(font, definition, line, text, locale, markdown, maxWidth, layout.line_height);
+        List<Glyph> glyphs = layoutGlyphs(font, definition, line, text, locale, tags, maxWidth, layout.line_height);
 
         List<String> baseEffects = resolveEffects(definition, line);
 
@@ -255,7 +257,7 @@ public final class DialogueEditorPreview {
                 continue;
             }
 
-            DialogueRichTextUtil.ResolvedStyle rich = DialogueRichTextUtil.resolve(line, text, glyph.index, locale);
+            DialogueRichTextUtil.ResolvedStyle rich = tags.resolve(line, glyph.index, locale);
 
             List<String> effects = rich.effects != null ? normalizeEffects(rich.effects) : baseEffects;
 
@@ -406,6 +408,8 @@ public final class DialogueEditorPreview {
                 text = choice.text != null ? "<" + choice.text + ">" : "<choice>";
             }
 
+            text = DialogueTextTags.expandPlain(text);
+
             int color = i == 0 ? parseColor(layout.choice_selected_color) : parseColor(layout.choice_color);
 
             graphics.drawString(font, (i == 0 ? "> " : "  ") + (i + 1) + ". " + text, 0, i * rowHeight, 0xFF000000 | color, false);
@@ -512,7 +516,7 @@ public final class DialogueEditorPreview {
         return ((value & 1023L) / 1023.0F - 0.5F) * 1.6F;
     }
 
-    private static List<Glyph> layoutGlyphs(Font font, DialogueDefinition definition, DialogueDefinition.Line line, String text, String locale, DialogueMarkdown.Result markdown, int maxWidth, int lineHeight) {
+    private static List<Glyph> layoutGlyphs(Font font, DialogueDefinition definition, DialogueDefinition.Line line, String text, String locale, DialogueTextTags.Result tags, int maxWidth, int lineHeight) {
         List<Glyph> result = new ArrayList<>();
         int x = 0;
         int y = 0;
@@ -528,7 +532,7 @@ public final class DialogueEditorPreview {
             }
 
             if (Character.isWhitespace(c)) {
-                int cw = styledWidth(font, definition, line, text, locale, markdown, i, c);
+                int cw = styledWidth(font, definition, line, text, locale, tags, i, c);
                 if (x + cw > maxWidth) {
                     x = 0;
                     y += lineHeight;
@@ -546,7 +550,7 @@ public final class DialogueEditorPreview {
 
             int wordWidth = 0;
             for (int j = i; j < wordEnd; j++) {
-                wordWidth += styledWidth(font, definition, line, text, locale, markdown, j, text.charAt(j));
+                wordWidth += styledWidth(font, definition, line, text, locale, tags, j, text.charAt(j));
             }
 
             if (x > 0 && x + wordWidth > maxWidth) {
@@ -556,7 +560,7 @@ public final class DialogueEditorPreview {
 
             for (int j = i; j < wordEnd; j++) {
                 char letter = text.charAt(j);
-                int cw = styledWidth(font, definition, line, text, locale, markdown, j, letter);
+                int cw = styledWidth(font, definition, line, text, locale, tags, j, letter);
                 if (x > 0 && x + cw > maxWidth) {
                     x = 0;
                     y += lineHeight;
@@ -569,9 +573,9 @@ public final class DialogueEditorPreview {
         return result;
     }
 
-    private static int styledWidth(Font font, DialogueDefinition definition, DialogueDefinition.Line line, String text, String locale, DialogueMarkdown.Result markdown, int index, char character) {
-        DialogueRichTextUtil.ResolvedStyle rich = DialogueRichTextUtil.resolve(line, text, index, locale);
-        return DialogueTextRenderUtil.width(font, character, effectiveGlyphStyle(definition, line, markdown, index, rich));
+    private static int styledWidth(Font font, DialogueDefinition definition, DialogueDefinition.Line line, String text, String locale, DialogueTextTags.Result tags, int index, char character) {
+        DialogueRichTextUtil.ResolvedStyle rich = tags.resolve(line, index, locale);
+        return DialogueTextRenderUtil.width(font, character, effectiveGlyphStyle(definition, line, tags.markdown(), index, rich));
     }
 
     private static DialogueTextRenderUtil.GlyphStyle effectiveGlyphStyle(DialogueDefinition definition, DialogueDefinition.Line line, DialogueMarkdown.Result markdown, int index, DialogueRichTextUtil.ResolvedStyle rich) {

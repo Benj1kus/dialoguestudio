@@ -155,13 +155,11 @@ public final class DialogueImageTextures {
                 for (int y = 0; y < animation.height(); y++) {
                     for (int x = 0; x < animation.width(); x++) {
                         int color = argb[y * animation.width() + x];
-                        // ImageIO supplies ARGB; NativeImage expects ABGR.
                         int abgr = (color & 0xFF00FF00) | (color >>> 16 & 255) | (color & 255) << 16;
                         image.setPixelRGBA(x, y, abgr);
                     }
                 }
             }
-            // One GPU texture per animation; decoded frames stay in bounded native memory.
             upload = new NativeImage(animation.width(), animation.height(), false);
             upload.copyFrom(frames.get(0));
             texture = new DynamicTexture(upload);
