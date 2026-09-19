@@ -5,6 +5,8 @@ import com.benji.dialoguestudio.dialogue.data.DialogueDefinition;
 import com.benji.dialoguestudio.dialogue.text.DialogueMarkdown;
 import com.benji.dialoguestudio.dialogue.text.DialogueRichTextUtil;
 import com.benji.dialoguestudio.dialogue.text.DialogueTextRenderUtil;
+import com.benji.dialoguestudio.dialogue.text.DialogueTextEffects;
+import com.benji.dialoguestudio.dialogue.text.DialogueNpcNameRenderer;
 import com.benji.dialoguestudio.network.dialogueengine.DialogueNetwork;
 import com.google.gson.Gson;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -708,6 +710,13 @@ public final class DialogueClient {
         renderFrame(graphics, alpha);
         renderText(graphics, font, time, partialTick, alpha, scale);
 
+        DialogueDefinition.Line name = definition.npc_name;
+        if (name != null) {
+            String nameText = name.literal != null ? name.literal : name.text != null ? I18n.get(name.text) : "";
+            String nameLocale = name.literal != null ? null : Minecraft.getInstance().getLanguageManager().getSelected();
+            DialogueNpcNameRenderer.render(graphics, font, definition, nameText, nameLocale, time, alpha, scale);
+        }
+
         if (nodeMode && !waitingForNodeState && isCurrentChoiceNode() && revealedChars >= currentText.length()) {
 
             renderChoices(graphics, font, alpha);
@@ -843,13 +852,15 @@ public final class DialogueClient {
 
         String locale = currentTextLocale();
 
+        DialogueTextEffects.Frame appearance = new DialogueTextEffects.Frame(currentText.length(), index -> currentTags.resolve(line, index, locale));
+
         for (Glyph glyph : glyphs) {
 
             if (glyph.index >= revealedChars) {
                 continue;
             }
 
-            DialogueRichTextUtil.ResolvedStyle rich = currentTags.resolve(line, glyph.index, locale);
+            DialogueRichTextUtil.ResolvedStyle rich = appearance.style(glyph.index);
 
             List<String> effects = rich.effects != null ? normalizedEffects(rich.effects) : baseEffects;
 
@@ -908,6 +919,8 @@ public final class DialogueClient {
             }
 
             int rgb = letterColor(line, glyph, maxWidth, time, rich);
+            rgb = DialogueTextEffects.color(rgb, effects, DialogueTextEffects.palette(definition, line, rich), time,
+                    glyph.index, appearance.start(glyph.index), appearance.length(glyph.index), DialogueClient::parseColor);
 
             int color = (alphaByte << 24) | rgb;
 
@@ -935,7 +948,7 @@ public final class DialogueClient {
 
             float glyphToGuiScale = dialogueCanvasScale * layout.text_scale * glyphScale;
 
-            DialogueTextRenderUtil.drawGlyph(graphics, font, glyph.character, color, outlineColor, outlineThickness, glyphStyle, glyphToGuiScale);
+            DialogueTextRenderUtil.drawGlyph(graphics, font, glyph.character, color, outlineColor, outlineThickness, glyphStyle, glyphToGuiScale, DialogueTextEffects.has(effects, "glow"));
 
             glyphPose.popPose();
         }

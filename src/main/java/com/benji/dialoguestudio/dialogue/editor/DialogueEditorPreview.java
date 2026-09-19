@@ -5,6 +5,8 @@ import com.benji.dialoguestudio.dialogue.data.DialogueDefinition;
 import com.benji.dialoguestudio.dialogue.text.DialogueMarkdown;
 import com.benji.dialoguestudio.dialogue.text.DialogueRichTextUtil;
 import com.benji.dialoguestudio.dialogue.text.DialogueTextRenderUtil;
+import com.benji.dialoguestudio.dialogue.text.DialogueTextEffects;
+import com.benji.dialoguestudio.dialogue.text.DialogueNpcNameRenderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
@@ -97,6 +99,8 @@ public final class DialogueEditorPreview {
         renderSprite(project, graphics, definition, line, ticks + partialTick);
         renderFrame(project, graphics, definition, line);
         renderText(project, graphics, definition, line, ticks + partialTick, nodePreview, scale);
+        DialogueNpcNameRenderer.render(graphics, headerFont, definition, project.npcNameText(),
+                definition.npc_name.literal != null ? null : project.preview_locale, (ticks + partialTick) / 20F, 1, scale);
 
         if (nodePreview) {
             DialogueDefinition.Node selectedNode = definition.nodes.get(project.selected_node);
@@ -251,13 +255,16 @@ public final class DialogueEditorPreview {
 
         pose.scale(layout.text_scale, layout.text_scale, 1);
 
+        String styleLocale = locale;
+        DialogueTextEffects.Frame appearance = new DialogueTextEffects.Frame(text.length(), index -> tags.resolve(line, index, styleLocale));
+
         for (Glyph glyph : glyphs) {
 
             if (glyph.index >= visible) {
                 continue;
             }
 
-            DialogueRichTextUtil.ResolvedStyle rich = tags.resolve(line, glyph.index, locale);
+            DialogueRichTextUtil.ResolvedStyle rich = appearance.style(glyph.index);
 
             List<String> effects = rich.effects != null ? normalizeEffects(rich.effects) : baseEffects;
 
@@ -317,6 +324,8 @@ public final class DialogueEditorPreview {
             }
 
             int rgb = letterColor(definition, line, glyph, maxWidth, time, rich);
+            rgb = DialogueTextEffects.color(rgb, effects, DialogueTextEffects.palette(definition, line, rich), time / 20.0,
+                    glyph.index, appearance.start(glyph.index), appearance.length(glyph.index), DialogueEditorPreview::parseColor);
 
             PoseStack glyphPose = graphics.pose();
 
@@ -340,7 +349,7 @@ public final class DialogueEditorPreview {
 
             float glyphToGuiScale = previewCanvasScale * layout.text_scale * glyphScale;
 
-            DialogueTextRenderUtil.drawGlyph(graphics, font, glyph.character, 0xFF000000 | rgb, 0xFF000000 | outlineRgb, outlineThickness, glyphStyle, glyphToGuiScale);
+            DialogueTextRenderUtil.drawGlyph(graphics, font, glyph.character, 0xFF000000 | rgb, 0xFF000000 | outlineRgb, outlineThickness, glyphStyle, glyphToGuiScale, DialogueTextEffects.has(effects, "glow"));
 
             glyphPose.popPose();
         }

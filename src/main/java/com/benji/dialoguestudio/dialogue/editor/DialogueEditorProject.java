@@ -69,6 +69,10 @@ public class DialogueEditorProject {
             definition.layout = new DialogueDefinition.Layout();
         }
 
+        if (definition.npc_name == null) definition.npc_name = new DialogueDefinition.Line();
+        if (definition.npc_name.literal == null && definition.npc_name.text == null) definition.npc_name.literal = "";
+        normalizeRichLine(definition.npc_name);
+
         if (definition.lines == null) {
             definition.lines = new ArrayList<>();
         }
@@ -403,6 +407,23 @@ public class DialogueEditorProject {
         }
 
         return line.text;
+    }
+
+    public String ensureNpcNameKey() {
+        DialogueDefinition.Line name = definition.npc_name;
+        if (name.text == null || name.text.isBlank()) name.text = "dialogue." + namespace + "." + dialogue_path.replace('/', '.') + ".npc_name";
+        return name.text;
+    }
+
+    public String npcNameText() {
+        if (definition.npc_name == null) return "";
+        if (definition.npc_name.literal != null) return definition.npc_name.literal;
+        return languages.computeIfAbsent(preview_locale, ignored -> new LinkedHashMap<>()).getOrDefault(ensureNpcNameKey(), "");
+    }
+
+    public void setNpcNameText(String text) {
+        if (definition.npc_name.literal != null) definition.npc_name.literal = text;
+        else languages.computeIfAbsent(preview_locale, ignored -> new LinkedHashMap<>()).put(ensureNpcNameKey(), text);
     }
 
 
@@ -746,6 +767,8 @@ public class DialogueEditorProject {
         definition.voice = replacePrefix(definition.voice, oldNamespace, newNamespace);
         definition.text_font = replacePrefix(definition.text_font, oldNamespace, newNamespace);
 
+        rewriteLineNamespace(definition.npc_name, oldNamespace, newNamespace);
+
         for (DialogueDefinition.Line line : definition.lines) {
             rewriteLineNamespace(line, oldNamespace, newNamespace);
         }
@@ -792,6 +815,10 @@ public class DialogueEditorProject {
         }
 
         languages = rewritten;
+
+        if (definition.npc_name != null && definition.npc_name.text != null && definition.npc_name.text.startsWith(oldPrefix)) {
+            definition.npc_name.text = newPrefix + definition.npc_name.text.substring(oldPrefix.length());
+        }
 
         for (DialogueDefinition.Line line : definition.lines) {
 

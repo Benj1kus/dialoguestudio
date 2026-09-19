@@ -44,7 +44,7 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         }
     }
 
-    private enum LayoutElement {FRAME, TEXT, SPRITE}
+    private enum LayoutElement {FRAME, TEXT, SPRITE, NPC_NAME}
 
     private enum DragAxis {NONE, X, Y, SCALE}
 
@@ -323,8 +323,44 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         cycleButton("Default sprite position", project.definition.sprite_position, 4, List.of("left", "center", "right"), s -> project.definition.sprite_position = s);
         cycleButton("Default sprite transition", project.definition.sprite_transition, 5, List.of("none", "bounce", "sway", "fade_up"), s -> project.definition.sprite_transition = s);
         smallFields("Move ticks", String.valueOf(project.definition.sprite_move_ticks), s -> project.definition.sprite_move_ticks = i(s, project.definition.sprite_move_ticks), "Transition ticks", String.valueOf(project.definition.sprite_transition_ticks), s -> project.definition.sprite_transition_ticks = i(s, project.definition.sprite_transition_ticks), 6);
-        help(8, "PNG/GIF picker copies files into the editor workspace. GIF keeps its frame timing.");
-        help(9, "Export writes them to assets/<namespace>/textures/gui/dialogue/.");
+
+        DialogueDefinition.Line name = project.definition.npc_name;
+        button("NPC name mode: " + (name.literal != null ? "LITERAL" : "LANG"), 7, b -> {
+            String old = project.npcNameText();
+            if (name.literal != null) {
+                name.literal = null;
+                project.ensureNpcNameKey();
+                project.setNpcNameText(old);
+            } else {
+                name.literal = old;
+                name.text = null;
+            }
+            reopen(tab);
+        });
+        field("NPC name (blank = hidden)", project.npcNameText(), 8, project::setNpcNameText, 512);
+        if (name.literal == null) field("NPC name translation key", project.ensureNpcNameKey(), 9, s -> name.text = s, 256);
+        else help(9, "Name starts centred above the frame. Layout > NPC_NAME moves/scales it.");
+        colorField("NPC name colour (blank = inherit)", nullToEmpty(name.text_color), 10, s -> name.text_color = blankToNull(s));
+        field("NPC gradient / colour flow palette", gradientOverride(name.text_gradient), 11, s -> name.text_gradient = parseGradient(s, true), 512);
+        button("NPC name font: " + fontSummary(name.text_font), 12, b -> minecraft.setScreen(new DialogueEditorFontPickerScreen(this, project, name.text_font, value -> {
+            name.text_font = value;
+            reopen(tab);
+        })));
+        button("NPC name outline...", 13, b -> minecraft.setScreen(DialogueOutlineEditorScreen.line(this, project, name)));
+        button("NPC name effects: " + effectsSummary(name.text_effects, true), 14, b -> minecraft.setScreen(new DialogueEditorTextEffectsScreen(this, name.text_effects, true, true, effects -> {
+            name.text_effects = effects;
+            reopen(tab);
+        })));
+        button("NPC name Rich Text: " + richRegionCount(name) + " regions", 15, b -> minecraft.setScreen(new DialogueRichTextEditorScreen(this, project, name, project.npcNameText(), name.literal != null ? null : project.preview_locale, "NPC name")));
+        toggleButton("NPC name Markdown", name.markdown != null ? name.markdown : project.definition.markdown, 16, value -> name.markdown = value);
+        button("Default text effects: " + effectsSummary(project.definition.text_effects, false), 17, b -> minecraft.setScreen(new DialogueEditorTextEffectsScreen(this,
+                com.benji.dialoguestudio.dialogue.text.DialogueTextEffects.baseEffects(project.definition, new DialogueDefinition.Line()), false, effects -> {
+            project.definition.text_effects = effects;
+            reopen(tab);
+        })));
+        field("Default gradient / colour flow palette (2+ colours)", join(project.definition.text_gradient), 18, s -> project.definition.text_gradient = parseGradient(s, false), 512);
+        help(19, "GLOW + COLOR FLOW can be combined. NPC names never use motion/typewriter effects.");
+        help(20, "PNG/GIF files keep their original timing and are included in Export.");
     }
 
     private void initLines() {
@@ -412,7 +448,13 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         smallFields("Move ticks", nullable(line.sprite_move_ticks), s -> line.sprite_move_ticks = ni(s), "Transition ticks", nullable(line.sprite_transition_ticks), s -> line.sprite_transition_ticks = ni(s), 7);
         smallFields("Sprite width", nullable(line.sprite_width), s -> line.sprite_width = ni(s), "Sprite height", nullable(line.sprite_height), s -> line.sprite_height = ni(s), 8);
         cycleNullableButton("Voice source override", line.voice_source, 9, List.of("master", "music", "records", "weather", "blocks", "hostile", "neutral", "players", "ambient", "voice"), s -> line.voice_source = s);
-        help(10, "Blank/INHERIT means this line uses the global value.");
+        button("Combined effects: " + effectsSummary(line.text_effects, true), 10, b -> minecraft.setScreen(new DialogueEditorTextEffectsScreen(this, line.text_effects, true, effects -> {
+            line.text_effects = effects;
+            reopen(tab);
+        })));
+        field("Gradient / colour flow palette: blank=inherit, none=off", gradientOverride(line.text_gradient), 11, s -> line.text_gradient = parseGradient(s, true), 512);
+        help(12, "COLOR FLOW uses 2+ gradient colours. GLOW can be stacked with any motion effect.");
+        help(13, "Blank/INHERIT means this line uses the global value.");
     }
 
     private void initLegacyLineTabLocked() {
@@ -498,7 +540,14 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         smallFields("Sprite W", String.valueOf(l.sprite_width), s -> l.sprite_width = i(s, l.sprite_width), "Sprite H", String.valueOf(l.sprite_height), s -> l.sprite_height = i(s, l.sprite_height), 6);
         smallFields("Left X", String.valueOf(l.sprite_left_x), s -> l.sprite_left_x = f(s, l.sprite_left_x), "Center X", String.valueOf(l.sprite_center_x), s -> l.sprite_center_x = f(s, l.sprite_center_x), 7);
         field("Right X", String.valueOf(l.sprite_right_x), 8, s -> l.sprite_right_x = f(s, l.sprite_right_x), 32);
-        help(10, "Drag RED = X, GREEN = Y, BLUE = resize/scale in the preview.");
+        smallFields("NPC centre X (blank=auto)", nullable(l.npc_name_x), s -> l.npc_name_x = nf(s), "NPC top Y (blank=auto)", nullable(l.npc_name_y), s -> l.npc_name_y = nf(s), 9);
+        field("NPC name scale", String.valueOf(l.npc_name_scale), 10, s -> l.npc_name_scale = Math.max(.1F, Math.min(4F, f(s, l.npc_name_scale))), 32);
+        button("NPC name: return to above-frame centre", 11, b -> {
+            l.npc_name_x = null;
+            l.npc_name_y = null;
+            reopen(tab);
+        });
+        help(12, "Drag RED = X, GREEN = Y, BLUE = resize/scale. NPC X is the centre of its text.");
     }
 
     private void initTriggers() {
@@ -1488,6 +1537,10 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
                 cx = l.text_x;
                 cy = l.text_y;
             }
+            case NPC_NAME -> {
+                cx = com.benji.dialoguestudio.dialogue.text.DialogueNpcNameRenderer.x(l);
+                cy = com.benji.dialoguestudio.dialogue.text.DialogueNpcNameRenderer.y(l, font.lineHeight);
+            }
             default -> {
                 cx = line.sprite_x != null ? line.sprite_x : switch ((line.sprite_position != null ? line.sprite_position : project.definition.sprite_position).toLowerCase(Locale.ROOT)) {
                     case "left" -> l.sprite_left_x;
@@ -1566,6 +1619,11 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
                     if (dragAxis == DragAxis.X) l.text_x += Math.round(dx);
                     if (dragAxis == DragAxis.Y) l.text_y += Math.round(dy);
                     if (dragAxis == DragAxis.SCALE) l.text_scale = Math.max(0.1F, l.text_scale + dx * 0.01F);
+                }
+                case NPC_NAME -> {
+                    if (dragAxis == DragAxis.X) l.npc_name_x = com.benji.dialoguestudio.dialogue.text.DialogueNpcNameRenderer.x(l) + dx;
+                    if (dragAxis == DragAxis.Y) l.npc_name_y = com.benji.dialoguestudio.dialogue.text.DialogueNpcNameRenderer.y(l, font.lineHeight) + dy;
+                    if (dragAxis == DragAxis.SCALE) l.npc_name_scale = Math.max(.1F, Math.min(4F, l.npc_name_scale + dx * .01F));
                 }
                 case SPRITE -> {
                     DialogueDefinition.Line line = project.currentLine();
@@ -1739,6 +1797,10 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
                 x = l.text_x;
                 y = l.text_y;
             }
+            case NPC_NAME -> {
+                x = com.benji.dialoguestudio.dialogue.text.DialogueNpcNameRenderer.x(l);
+                y = com.benji.dialoguestudio.dialogue.text.DialogueNpcNameRenderer.y(l, font.lineHeight);
+            }
             default -> {
                 x = line.sprite_x != null ? line.sprite_x : resolveSpriteXForEdit();
                 y = l.sprite_y;
@@ -1860,6 +1922,9 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
                 d.sprite_transition = defaults.sprite_transition;
                 d.sprite_move_ticks = defaults.sprite_move_ticks;
                 d.sprite_transition_ticks = defaults.sprite_transition_ticks;
+                d.npc_name = defaults.npc_name;
+                d.text_effects = defaults.text_effects;
+                d.text_gradient = defaults.text_gradient;
             }
 
             case LINES -> {
@@ -1890,6 +1955,8 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
                 line.sprite_width = null;
                 line.sprite_height = null;
                 line.voice_source = null;
+                line.text_effects = null;
+                line.text_gradient = null;
             }
 
             case NODES -> {
@@ -2318,9 +2385,10 @@ public final class DialogueEditorScreen extends DialogueRetroScreen {
         int maxRow = switch (tab) {
             case PROJECT -> 21;
             case DIALOGUE -> 18;
-            case VISUALS -> 9;
+            case VISUALS -> 20;
             case LINES -> 13;
-            case LINE_OVERRIDES, LAYOUT -> 10;
+            case LINE_OVERRIDES -> 13;
+            case LAYOUT -> 12;
             case TRIGGERS -> 32;
             case ZONE_FX -> 36;
             case NODES -> 13;

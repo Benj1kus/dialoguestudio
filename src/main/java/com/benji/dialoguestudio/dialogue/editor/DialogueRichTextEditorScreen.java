@@ -4,6 +4,7 @@ import com.benji.dialoguestudio.dialogue.data.DialogueDefinition;
 import com.benji.dialoguestudio.dialogue.text.DialogueMarkdown;
 import com.benji.dialoguestudio.dialogue.text.DialogueRichTextUtil;
 import com.benji.dialoguestudio.dialogue.text.DialogueTextRenderUtil;
+import com.benji.dialoguestudio.dialogue.text.DialogueTextEffects;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -208,13 +209,14 @@ public final class DialogueRichTextEditorScreen extends DialogueRetroScreen {
 
             y = addFullButton(y, regionOutlineSummary(region), () -> minecraft.setScreen(DialogueOutlineEditorScreen.region(this, project, line, region)));
 
-            y = addFullButton(y, "Combined effects: " + effectsSummary(region.effects), () -> minecraft.setScreen(new DialogueEditorTextEffectsScreen(this, region.effects, true, effects -> {
+            y = addFullButton(y, "Combined effects: " + effectsSummary(region.effects), () -> minecraft.setScreen(new DialogueEditorTextEffectsScreen(this, region.effects, true, isNpcName(), effects -> {
                 region.effects = effects;
 
                 rebuild();
             })));
 
-            y = addFullButton(y, "Visual animation parameters...", () -> minecraft.setScreen(new DialogueTextAnimationEditorScreen(this, project, line, region, snippet)));
+            if (!isNpcName()) y = addFullButton(y, "Visual animation parameters...", () -> minecraft.setScreen(new DialogueTextAnimationEditorScreen(this, project, line, region, snippet)));
+            y = addInfoCard(y, "COLOUR EFFECTS", "GLOW adds a soft aura. COLOR FLOW animates the gradient stops above (2 or more colours). All can be combined.", 0xFF526B3D, 0xFFD2C8AA);
             y = addInfoCard(y, "REGION OVERRIDES", "Color, gradient and effect stack are independent. Example: one word can be red + shake while the rest of the line keeps the inherited gold wave.", 0xFF566B3E, 0xFFD8E36A);
             y = addFullButton(y, "Reset ONLY this region's style to INHERIT", () -> {
                 region.color = null;
@@ -461,9 +463,11 @@ public final class DialogueRichTextEditorScreen extends DialogueRetroScreen {
 
         String activeLocale = locale;
 
+        DialogueTextEffects.Frame appearance = new DialogueTextEffects.Frame(text.length(), index -> DialogueRichTextUtil.resolve(line, text, index, activeLocale));
+
         for (TextGlyph glyph : textGlyphs) {
 
-            DialogueRichTextUtil.ResolvedStyle rich = DialogueRichTextUtil.resolve(line, text, glyph.index, activeLocale);
+            DialogueRichTextUtil.ResolvedStyle rich = appearance.style(glyph.index);
             List<String> effects = rich.effects != null ? normalizeEffects(rich.effects) : baseEffects();
 
             DialogueDefinition.TextAnimation animation = rich.animation;
@@ -476,7 +480,7 @@ public final class DialogueRichTextEditorScreen extends DialogueRetroScreen {
             float simulationAge = (previewTicks + partialTick + glyph.index * 1.5F) % 24.0F;
             for (String effect : effects) {
 
-                if (effect == null) {
+                if (effect == null || isNpcName()) {
                     continue;
                 }
 
@@ -520,6 +524,8 @@ public final class DialogueRichTextEditorScreen extends DialogueRetroScreen {
             }
 
             int rgb = resolvedColor(glyph, rich);
+            rgb = DialogueTextEffects.color(rgb, effects, DialogueTextEffects.palette(project.definition, line, rich), (previewTicks + partialTick) / 20.0,
+                    glyph.index, appearance.start(glyph.index), appearance.length(glyph.index), DialogueEditorPreview::parseColor);
 
             PoseStack pose = graphics.pose();
 
@@ -537,7 +543,7 @@ public final class DialogueRichTextEditorScreen extends DialogueRetroScreen {
             int outlineRgb = resolvedOutlineColor(glyph, rich);
             float outlineThickness = resolvedOutlineThickness(rich);
 
-            DialogueTextRenderUtil.drawGlyph(graphics, font, glyph.character, 0xFF000000 | rgb, 0xFF000000 | outlineRgb, outlineThickness, glyphStyle, scale);
+            DialogueTextRenderUtil.drawGlyph(graphics, font, glyph.character, 0xFF000000 | rgb, 0xFF000000 | outlineRgb, outlineThickness, glyphStyle, scale, DialogueTextEffects.has(effects, "glow"));
 
             pose.popPose();
         }
@@ -545,6 +551,8 @@ public final class DialogueRichTextEditorScreen extends DialogueRetroScreen {
         graphics.disableScissor();
     }
 
+
+    private boolean isNpcName() { return line == project.definition.npc_name; }
 
     private int resolvedColor(TextGlyph glyph, DialogueRichTextUtil.ResolvedStyle rich) {
         if (rich.gradient != null) {

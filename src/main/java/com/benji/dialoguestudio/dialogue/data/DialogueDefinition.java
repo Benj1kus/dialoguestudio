@@ -28,6 +28,8 @@ public class DialogueDefinition {
 
     public String text_style;
 
+    public Line npc_name = new Line();
+
     public boolean markdown = false;
     public String text_font;
     public String text_outline_color;
@@ -83,6 +85,10 @@ public class DialogueDefinition {
 
         public float text_scale = 0.72F;
         public int line_height = 10;
+
+        public Float npc_name_x;
+        public Float npc_name_y;
+        public float npc_name_scale = 0.72F;
 
         public int sprite_width = 126;
         public int sprite_height = 78;
